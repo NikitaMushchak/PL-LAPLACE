@@ -1,0 +1,70 @@
+#
+# 'make'                    builds everything from source
+# 'make openmp'             builds everything from source with OpenMP support
+#
+# 'make planar3D'           builds executable file from source
+# 'make planar3D.openmp'    builds executable file from source with OpenMP
+#                           support
+#
+# 'make create_dirs'        creates folders and files required by the program
+# 'make clean'              removes all generated files and folders
+#
+
+ifeq ($(origin CXX), default)
+CXX = g++
+endif
+CXXFLAGS ?= -O3 -std=c++11 -march=native -Weffc++ -w -pedantic
+# -w
+
+EXECUTABLE_NAME = planar3D
+CPP_FLAGS = $(CXXFLAGS) \
+	-D_TARGET_="$(shell uname -m)+$(shell uname -p)" \
+	-D_TIMESTAMP_="$(shell date +"%d.%m.%y %H:%M:%S")" \
+	-D_PLATFORM_="$(shell [ "Darwin" = "$(shell uname)" ] && echo "mac" || echo "unix")" \
+	-D_COMPILER_="$(CXX)$(shell $(CXX) -dumpversion)"
+OPENMP_CPP_FLAGS = $(CXXFLAGS) \
+	-D_TARGET_="$(shell uname -m)+$(shell uname -p)" \
+	-D_TIMESTAMP_="$(shell date +"%d.%m.%y %H:%M:%S")" \
+	-D_PLATFORM_="$(shell [ "Darwin" = "$(shell uname)" ] && echo "mac" || echo "unix")+openmp" \
+	-D_COMPILER_="$(CXX)$(shell $(CXX) -dumpversion)" \
+	-DOPENMP -Xpreprocessor -fopenmp -lomp -L/usr/local/opt/libomp/lib -I/usr/local/opt/libomp/include
+DIR_SRC = ./sources
+DIR_DATA = $(DIR_SRC)/data
+DIR_INCLUDE = ./include
+DIR_BUILD = ./build
+SRC_FILES = $(DIR_SRC)/*.cc
+DATA_FILES = $(DIR_DATA)/*.txt
+
+.PHONY: all
+all: clean create_dirs planar3D
+
+.PHONY: openmp
+openmp: clean create_dirs planar3D.openmp
+
+.PHONY: clean
+clean:
+	rm -rf $(DIR_BUILD)
+    
+.PHONY: create_dirs
+create_dirs:
+	mkdir -p $(DIR_BUILD)
+	mkdir -p $(DIR_BUILD)/InitialConditions
+	mkdir -p $(DIR_BUILD)/Results
+	mkdir -p $(DIR_BUILD)/Results/Concentration
+	mkdir -p $(DIR_BUILD)/Results/Opening
+	mkdir -p $(DIR_BUILD)/Results/Pressure
+	[ -d "$(DIR_DATA)" ] && cp -f $(DATA_FILES) $(DIR_BUILD)/InitialConditions
+
+$(EXECUTABLE_NAME) : $(SRC_FILES)
+	$(CXX) $(CPP_FLAGS) -o $(DIR_BUILD)/$(EXECUTABLE_NAME) -I$(DIR_INCLUDE) $(SRC_FILES)
+	rm -f *.obj
+	
+$(EXECUTABLE_NAME).openmp : $(SRC_FILES)
+	$(CXX) $(OPENMP_CPP_FLAGS) -o $(DIR_BUILD)/$(EXECUTABLE_NAME) -I$(DIR_INCLUDE) $(SRC_FILES)
+	rm -f *.obj
+	
+.PHONY: planar3D
+planar3D: $(EXECUTABLE_NAME)
+
+.PHONY: planar3D.openmp
+planar3D.openmp: $(EXECUTABLE_NAME).openmp
