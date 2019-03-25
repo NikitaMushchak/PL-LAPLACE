@@ -208,7 +208,7 @@ void calculatePressure(
         const size_t i = activeElements[k][0];
         const size_t j = activeElements[k][1];
         // pressure[index[i][j]] = partialPressure[k] / dx + stress[j];
-        pressure[index[i][j]] = press[i+Nx*j]/dx ;//+stress[j];
+        pressure[index[i][j]] = -press[i+Nx*j]/dx ;//+stress[j];
     }
     ai::saveVector("pr", pressure);
 }

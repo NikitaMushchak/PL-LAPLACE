@@ -623,6 +623,12 @@ int calculateEverything(
     size_t &Ny,
     size_t &Nz
 ){
+
+
+    double dx = x[1]-x[0];
+    double dy = y[1]-y[0];
+    std::cout<<"dx = "<<dx <<" dy = "<<dy<<std::endl;
+
     alpha = 2. / (n + 2.);
     double BAlpha = 0.25 * alpha * tan(0.5 * M_PI - M_PI * (1 - alpha));
     Amu = std::pow(BAlpha * (1 - alpha), -0.5 * alpha);
@@ -684,7 +690,8 @@ int calculateEverything(
 
     while(modelingTime >= T && meshIsNotExhausted){
 		// ai::printLine("1");
-		meshIsNotExhausted=0;
+		//
+        // meshIsNotExhausted=0;
 		double maxOpen = wn*ai::max(opening);
 
         if(-1. == timeStep){
@@ -706,8 +713,8 @@ int calculateEverything(
             Ny
         );
 
-		ai::saveVector("openingnew",openingNew);
-		ai::saveVector("pressure",pressure);
+		//ai::saveVector("openingnew",openingNew);
+		//ai::saveVector("pressure",pressure);
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         timeMeasurements[0] += ai::duration(time0, "us");
         #endif
@@ -731,7 +738,10 @@ int calculateEverything(
             proppantDensity,
             n
         );
-        std::cout<<"calcOpenAndConce"<<std::endl;
+        //ai::saveVector("dWdt", dWdt);
+        //ai::saveVector("dCdt", dCdt);
+        //ai::saveVector("calcope",opening);
+        //std::cout<<"calcOpenAndConce"<<std::endl;
         ai::printMarker();//2
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         timeMeasurements[1] += ai::duration(time1, "us");
@@ -794,7 +804,10 @@ int calculateEverything(
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         auto time3 = ai::time();
         #endif
+        //dt= 0.0001;
+        std::cout<<"dt = "<<std::fixed<<std::setprecision(7)<<dt<<std::endl;
         for(std::size_t i = 0; i < opening.size(); ++i){
+            //std::cout<<"opening  cicle"<<std::endl;
             concentration[i] = ai::max(
                 concentration[i] * opening[i] + dCdt[i] * dt,
                 0.
@@ -817,6 +830,7 @@ int calculateEverything(
                 concentration[i] = 0.585 - epsilon;
             }
         }
+        ai::saveVector("ateropen", opening);
         std::cout<<"epsilon()"<<std::endl;
         ai::printMarker();//4
         #if defined(DEBUG) && !defined(BUILD_DLL)
@@ -828,6 +842,7 @@ int calculateEverything(
         }
         #endif
         std::cout<<"Opening new"<<std::endl;
+        ai::saveVector("opeconce",opening);
         for(std::size_t k = 0; k < activeElements.size(); ++k){
             const std::size_t i = activeElements[k][0];
             const std::size_t j = activeElements[k][1];
@@ -842,6 +857,8 @@ int calculateEverything(
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         auto time4 = ai::time();
         #endif
+
+        ////// STEPTOCHECK \\\\\\
         if(step >= stepToCheck){
             if(runningFromGUI){
                 std::cout << "Progress: " << (T - T0) / (modelingTime - T0)
@@ -921,16 +938,29 @@ int calculateEverything(
                     distances[i][j] = 0;
                 }
             }
-
-            if(savedSize != activeElements.size() && meshIsNotExhausted){
-                // buildPartialInfluenceMatrix(influenceMatrix, activeElements,
-                //     opening, openingNew, partialInfluenceMatrix, index
-                //);
+            ai::saveVector("PREOPEN",opening );
+            if(savedSize != activeElements.size() && 1/*meshIsNotExhausted*/){
+                buildPartialInfluenceMatrix(influenceMatrix, activeElements,
+                    opening, openingNew, partialInfluenceMatrix, index
+                );
             }
 
             // Сохраняем параметры трещины
 
             calculateCrackGeometry(mesh, distances, length, height);
+
+            std::cout<<"length = "<<length<<"   heigth = "<<height<<std::endl;
+
+            if(Nx * dx < (3./2.)*length/2. || (Ny+1) * dy < (3./2.)*height){
+
+                Nx = (3./2.)*std::ceil(length/2.);
+                Ny = (3./2.)*std::ceil(height)-1;
+                Nz = Nx;
+                N_dof = Nx*Ny*Nz;
+                std::cout<<"Nx = "<<Nx<<"  Ny  = "<<Ny<<" Nz = "<<Nz<<" N_dof = "<<N_dof<<std::endl;
+
+                createMatrixDiag(partialInfluenceMatrix, N_dof, Nx , Ny, Nz);
+            }
 
             fracture.push_back(
                 std::vector<double>{
@@ -955,6 +985,7 @@ int calculateEverything(
 
                 savedTime = T;
             }
+            //break;
         }
         ai::printMarker();
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
@@ -1136,7 +1167,7 @@ int calculateEverything(
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         timeMeasurements[7] += ai::duration(time7, "us");
         #endif
-    }
+    //}
 
     auto finishTime = ai::time();
 
@@ -1144,17 +1175,18 @@ int calculateEverything(
     timeMeasurements[8] = ai::duration(startTime, finishTime, "us");
     #endif
 
-    #if !defined(BUILD_DLL)
-    if(meshIsNotExhausted){
+    //#if !defined(BUILD_DLL)
+    #if defined(BUILD_DLL)
+    if(meshIsNotExhausted=0){
         if(runningFromGUI){
             std::cout << "Progress: 1.0" << std::endl;
         }else{
             ai::showProgressBar(1.);
         }
 
-        std::cout << std::endl;
+        std::cout << " "<< std::endl;
     }else{
-        if(runningFromGUI){
+        if(runningFromGUI=0){
             std::cout << "Progress: " << (T - T0) / (modelingTime - T0) << std::endl;
         }else{
             ai::showProgressBar((T - T0) / (modelingTime - T0));
@@ -1367,7 +1399,7 @@ int planar3D(
 
     // Масштабируем величины
 
-    //fluidInjection *= timeScale / (wn * 60.);
+    fluidInjection *= timeScale / (wn * 60.);
 
     // Строим автомодельное решение
 
@@ -1441,6 +1473,9 @@ int planar3D(
         std::cout << "Initial regime: " << regimeName() << "." << std::endl;
     }
 
+    ///////// Костыль!!!!
+    //initialRadius = 10.;
+ /////////////////////
     dt = 0.0001 * std::pow(5. / floor(initialRadius / cellSize), 2);
 
     if(-1. != timeStep && !override){
@@ -1565,26 +1600,28 @@ int planar3D(
     std::vector<double> opening = zeroVectorXY;
 	std::vector<std::vector<double> > opep = zeroMatrixXY;
     std::vector< std::vector<size_t> > index(xSize, zeroSizeTVectorY);
-    double co;
+    //double co;
     for(size_t i = 0; i < xSize; ++i){
         for(size_t j = 0; j < ySize; ++j){
             index[i][j] = i * ySize + j;
 
-            co = -0.5*cos(0.5 *M_PI* std::sqrt(x[i]*x[i]+y[j]*y[j])/(
-            //xSize*0.8/dx
-            10.
-            ));
+            // co = 0.5*cos(0.5 *M_PI* std::sqrt(x[i]*x[i]+y[j]*y[j])/(
+            // //xSize*0.8/dx
+            // 10.
+            // ));
             opening[ index[i][j] ] = getInitialOpening(
                 x[i],
                 y[j],
                 //xSize*0.8/dx,
-                10.,
+                initialRadius,
+                //10.,
                 zP,
                 openingAtTheStart
-            )>epsilon?co:0.;
+            );
+
             // if(x[i]*x[i]+y[j]*y[j] <= 0.8*0.8*xSize*xSize)
 			//          opening[index[i][j]]=1;
-			opep[i][j] = abs(opening[index[i][j]])>epsilon?co:0.;
+			//opep[i][j] = abs(opening[index[i][j]])>epsilon?co:0.;
         }
     }
 	//ai::printVector(opening);
@@ -1608,17 +1645,11 @@ int planar3D(
    size_t N_dof = Nx * Ny * Nz;
 
 
-   // opening.resize(N_dof);
-   //
-   // for(size_t i = 0 ; i < Nx; ++i){
-   //         for(size_t j = 0 ; j < Ny; ++j){
-   //             opening[i + j*Nx] =  opep[i][j];
-   //         }
-   //     }
-ai::saveVector("New opening", opening);
+
 
    std::vector<std::vector<double> > influenceMatrix; // matrix corresponding to finite difference discretization of Laplace equation (AT = b)
    influenceMatrix.resize(N_dof);                     //. Nonzero elements are stored only.
+
    for(size_t i = 0; i < N_dof; ++i){
        influenceMatrix[i].resize(7);
    }
@@ -1627,10 +1658,10 @@ ai::saveVector("New opening", opening);
 
    createMatrixDiag(influenceMatrix, N_dof, Nx , Ny, Nz);
 
-    //buildInfluenceMatrix(influenceMatrix, xSize, ySize);
+
 
     std::cout << "OK." << std::endl;
-    //std::vector<double> b(N_dof, 0.);  // right side of finite difference discretization of Laplace equation
+
 
 
     // if(considerElasticModulusContrast){
@@ -1669,6 +1700,7 @@ ai::saveVector("New opening", opening);
         //std::cout << "OK." << std::endl;
 
     //}
+    std::cout<< "Initial Radius = "<<initialRadius <<std::endl;
     std::cout << "Mesh: " << mesh.size() << "x" << mesh[0].size() << "."
         << std::endl;
 
@@ -1676,7 +1708,7 @@ ai::saveVector("New opening", opening);
 
     std::vector< std::vector<std::size_t> > activeElements;
 
-    findActiveElements(activeElements, elementIsActive, x, y, 10./*xSize*0.8/dx/*initialRadius*/);
+    findActiveElements(activeElements, elementIsActive, x, y, initialRadius);
 
     std::cout << "Active elements: " << activeElements.size() << "."
         << std::endl;
