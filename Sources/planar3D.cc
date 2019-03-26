@@ -687,12 +687,14 @@ int calculateEverything(
 
 	// std::vector<double> val1;
 	// std::vector<double> val2;
-
+    size_t iter=0;
     while(modelingTime >= T && meshIsNotExhausted){
 		// ai::printLine("1");
-		//
-        // meshIsNotExhausted=0;
-		double maxOpen = wn*ai::max(opening);
+        iter++;
+        if(iter==1){
+        meshIsNotExhausted=0;
+        }
+        double maxOpen = wn*ai::max(opening);
 
         if(-1. == timeStep){
             dt = 0.06 * mu / (E * std::pow(maxOpen / dx, 3));
@@ -738,9 +740,9 @@ int calculateEverything(
             proppantDensity,
             n
         );
-        //ai::saveVector("dWdt", dWdt);
-        //ai::saveVector("dCdt", dCdt);
-        //ai::saveVector("calcope",opening);
+        ai::saveVector("dWdt", dWdt);
+        ai::saveVector("dCdt", dCdt);
+        ai::saveVector("calcope",opening);
         //std::cout<<"calcOpenAndConce"<<std::endl;
         ai::printMarker();//2
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
