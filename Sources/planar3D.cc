@@ -964,10 +964,14 @@ int calculateEverything(
                 Nz = Nx;
                 N_dof = Nx*Ny*Nz;
                 std::cout<<"Nx = "<<Nx<<"  Ny  = "<<Ny<<" Nz = "<<Nz<<" N_dof = "<<N_dof<<std::endl;
-
+                partialInfluenceMatrix.resize(N_dof);
+                for(size_t i =0 ; i <N_dof; ++i){
+                    partialInfluenceMatrix[i].resize(7);
+                }
                 createMatrixDiag(partialInfluenceMatrix, N_dof, Nx , Ny, Nz);
                 ai::printMarker();
                 std::cout<<"create new martix"<<std::endl;
+                //
                 ai::saveMatrix("Matrix", partialInfluenceMatrix);
             }
 

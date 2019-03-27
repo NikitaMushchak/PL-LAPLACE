@@ -85,16 +85,13 @@ void multiplyDiag(std::vector<double> &y, std::vector<std::vector<double> >&A,st
         y[i] += A[i][5]*x[i+Nx];
     }
 
-
    for(size_t i = 0 ; i<N_dof - NxNy;++i ){
        y[i] += A[i][6]*x[i+NxNy];
    }
 }
 
 double MultiplyVV(std::vector<double>&a, std::vector<double>&b){
-    if( a.size()!=b.size() ){
 
-    }
     double c = 0.;
     for(size_t i = 0; i < a.size(); i++){
         c=c+ a[i]*b[i];
@@ -209,7 +206,7 @@ void calculatePressure(
     for(std::size_t k = 0; k < activeElements.size(); ++k){
         const size_t i = activeElements[k][0];
         const size_t j = activeElements[k][1];
-    
+
         pressure[ index[i][j] ] = press[i+Nx*j] / dx + stress[j];
     }
     // ai::saveVector("pr", pressure);
