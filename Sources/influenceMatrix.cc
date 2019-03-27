@@ -125,5 +125,6 @@ void buildInfluenceMatrix(
         //     partialInfluenceMatrix[i][j] = influenceMatrix[pc2][pc1];
         // }
     }
-    ai::saveVector("parOpen", partialOpening);
+    // ai::saveVector("parOpen", partialOpening);
+    // ai::saveVector("parOpening", opening);
 }

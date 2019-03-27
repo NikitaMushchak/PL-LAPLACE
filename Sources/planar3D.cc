@@ -691,18 +691,19 @@ int calculateEverything(
     while(modelingTime >= T && meshIsNotExhausted){
 		// ai::printLine("1");
         iter++;
-        if(iter==1){
-        meshIsNotExhausted=0;
-        }
+        // if(iter == 1 ){
+        // meshIsNotExhausted=0;
+        // }
         double maxOpen = wn*ai::max(opening);
 
         if(-1. == timeStep){
             dt = 0.06 * mu / (E * std::pow(maxOpen / dx, 3));
         }
-        std::cout<<"active Elements = "<<activeElements.size()<<std::endl;
+        // std::cout<<"active Elements = "<<activeElements.size()<<std::endl;
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         time0 = ai::time();
         #endif
+
         calculatePressure(
             pressure,
             index,
@@ -715,8 +716,8 @@ int calculateEverything(
             Ny
         );
 
-		//ai::saveVector("openingnew",openingNew);
-		//ai::saveVector("pressure",pressure);
+		 // ai::saveVector("openingnew",openingNew);
+		 // ai::saveVector("pressure",pressure);
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         timeMeasurements[0] += ai::duration(time0, "us");
         #endif
@@ -724,6 +725,7 @@ int calculateEverything(
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         auto time1 = ai::time();
         #endif
+
         calculateOpeningAndConcentrationSpeeds(
             dWdt,
             dCdt,
@@ -740,11 +742,11 @@ int calculateEverything(
             proppantDensity,
             n
         );
-        ai::saveVector("dWdt", dWdt);
-        ai::saveVector("dCdt", dCdt);
-        ai::saveVector("calcope",opening);
+        // ai::saveVector("dWdt", dWdt);
+        // ai::saveVector("dCdt", dCdt);
+        // ai::saveVector("calcope",opening);
         //std::cout<<"calcOpenAndConce"<<std::endl;
-        ai::printMarker();//2
+        // ai::printMarker();//2
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         timeMeasurements[1] += ai::duration(time1, "us");
         #endif
@@ -798,7 +800,7 @@ int calculateEverything(
                 }
             }
         }
-        ai::printMarker();//3
+        // ai::printMarker();//3
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         timeMeasurements[2] += ai::duration(time2, "us");
         #endif
@@ -807,7 +809,7 @@ int calculateEverything(
         auto time3 = ai::time();
         #endif
         //dt= 0.0001;
-        std::cout<<"dt = "<<std::fixed<<std::setprecision(7)<<dt<<std::endl;
+        // std::cout<<"dt = "<<std::fixed<<std::setprecision(7)<<dt<<std::endl;
         for(std::size_t i = 0; i < opening.size(); ++i){
             //std::cout<<"opening  cicle"<<std::endl;
             concentration[i] = ai::max(
@@ -832,9 +834,9 @@ int calculateEverything(
                 concentration[i] = 0.585 - epsilon;
             }
         }
-        ai::saveVector("ateropen", opening);
-        std::cout<<"epsilon()"<<std::endl;
-        ai::printMarker();//4
+        // ai::saveVector("ateropen", opening);
+        // std::cout<<"epsilon()"<<std::endl;
+        //ai::printMarker();//4
         #if defined(DEBUG) && !defined(BUILD_DLL)
         if(std::isnan(opening[index[i00][j00]])){
             ai::printLine(
@@ -843,15 +845,15 @@ int calculateEverything(
             break;
         }
         #endif
-        std::cout<<"Opening new"<<std::endl;
-        ai::saveVector("opeconce",opening);
+        // std::cout<<"Opening new"<<std::endl;
+        // ai::saveVector("opeconce",opening);
         for(std::size_t k = 0; k < activeElements.size(); ++k){
             const std::size_t i = activeElements[k][0];
             const std::size_t j = activeElements[k][1];
 
             openingNew[k] = opening[index[i][j]];
         }
-        ai::printMarker();//5
+        // ai::printMarker();//5
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         timeMeasurements[3] += ai::duration(time3, "us");
         #endif
@@ -859,9 +861,10 @@ int calculateEverything(
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         auto time4 = ai::time();
         #endif
-
-        ////// STEPTOCHECK \\\\\\
+         // std::cout<<"step = "<<step<<"   stepToCheck = "<<stepToCheck<<std::endl;
+        ////// STEPTOCHECK
         if(step >= stepToCheck){
+
             if(runningFromGUI){
                 std::cout << "Progress: " << (T - T0) / (modelingTime - T0)
                     << std::endl;
@@ -876,7 +879,7 @@ int calculateEverything(
                     dx / (20. * dt * ai::max(velocities))
                 );
             }
-
+ std::cout<<"step to check!!!!!!!!!!!"<<std::endl;
             const size_t savedSize = activeElements.size();
 
             std::vector<Ribbon> oldRibbons = ribbons;
@@ -891,6 +894,7 @@ int calculateEverything(
                 }
 
                 const double d = distances[i][j];
+
 
                 if(0 < i){
                     findNewRibbons(i - 1, j, d, dMin1, dCenter1, n, opening, leakOff, mesh,
@@ -940,8 +944,8 @@ int calculateEverything(
                     distances[i][j] = 0;
                 }
             }
-            ai::saveVector("PREOPEN",opening );
-            if(savedSize != activeElements.size() && 1/*meshIsNotExhausted*/){
+            //ai::saveVector("PREOPEN",opening );
+            if(savedSize != activeElements.size() ){
                 buildPartialInfluenceMatrix(influenceMatrix, activeElements,
                     opening, openingNew, partialInfluenceMatrix, index
                 );
@@ -962,6 +966,9 @@ int calculateEverything(
                 std::cout<<"Nx = "<<Nx<<"  Ny  = "<<Ny<<" Nz = "<<Nz<<" N_dof = "<<N_dof<<std::endl;
 
                 createMatrixDiag(partialInfluenceMatrix, N_dof, Nx , Ny, Nz);
+                ai::printMarker();
+                std::cout<<"create new martix"<<std::endl;
+                ai::saveMatrix("Matrix", partialInfluenceMatrix);
             }
 
             fracture.push_back(
@@ -974,7 +981,7 @@ int calculateEverything(
                     length / height
                 }
             );
-
+            std::cout<<"aaaaa"<<std::endl;
             if(0 == regime){
                 savedDistances.resize(ribbons.size());
 
@@ -989,7 +996,7 @@ int calculateEverything(
             }
             //break;
         }
-        ai::printMarker();
+        //ai::printMarker();
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         timeMeasurements[4] += ai::duration(time4, "us");
         #endif
@@ -997,7 +1004,7 @@ int calculateEverything(
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         auto time5 = ai::time();
         #endif
-        if(saveSteps && 0 == globalStep % stepToSave){
+        if(saveSteps && 0 == step/*globalStep % stepToSave*/){
             #if defined(BUILD_DLL)
             /// \todo Сохраняться в json
             #else
@@ -1169,7 +1176,7 @@ int calculateEverything(
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         timeMeasurements[7] += ai::duration(time7, "us");
         #endif
-    //}
+    }
 
     auto finishTime = ai::time();
 
@@ -1433,7 +1440,7 @@ int planar3D(
     double T = T0;
 
     initialRadius *= std::pow(fluidInjection, 1. / 3.) * std::pow(T0, gammaR);
-
+    // initialRadius = 10.;
     // Пересчитываем автомодельное решение в соответсвии с параметрами закачки
 
     std::vector<double> zP;
@@ -1476,7 +1483,7 @@ int planar3D(
     }
 
     ///////// Костыль!!!!
-    //initialRadius = 10.;
+    // initialRadius = 10.;
  /////////////////////
     dt = 0.0001 * std::pow(5. / floor(initialRadius / cellSize), 2);
 
@@ -1602,15 +1609,15 @@ int planar3D(
     std::vector<double> opening = zeroVectorXY;
 	std::vector<std::vector<double> > opep = zeroMatrixXY;
     std::vector< std::vector<size_t> > index(xSize, zeroSizeTVectorY);
-    //double co;
+    // double co;
     for(size_t i = 0; i < xSize; ++i){
         for(size_t j = 0; j < ySize; ++j){
             index[i][j] = i * ySize + j;
 
             // co = 0.5*cos(0.5 *M_PI* std::sqrt(x[i]*x[i]+y[j]*y[j])/(
-            // //xSize*0.8/dx
-            // 10.
-            // ));
+            //xSize*0.8/dx
+            // initialRadius
+            // ) );
             opening[ index[i][j] ] = getInitialOpening(
                 x[i],
                 y[j],
@@ -1618,18 +1625,24 @@ int planar3D(
                 initialRadius,
                 //10.,
                 zP,
-                openingAtTheStart
-            );
+                openingAtTheStart);
+            // )>epsilon?co:0.;
 
-            // if(x[i]*x[i]+y[j]*y[j] <= 0.8*0.8*xSize*xSize)
-			//          opening[index[i][j]]=1;
-			//opep[i][j] = abs(opening[index[i][j]])>epsilon?co:0.;
+
+			// opep[i][j] = abs(opening[index[i][j]])>epsilon?co:0.;
         }
     }
 	//ai::printVector(opening);
-	// ai::printMarker();
+	// ai::printMarker()
 	ai::saveVector("iniopening", opening);
 	ai::saveMatrix("iniopep",opep);
+    size_t col = 0;
+    for(size_t i= 0 ; i<opening.size(); ++i){
+        if(std::abs(opening[i])>epsilon){
+            col++;
+        }
+    }
+    std::cout<<"non null elements = "<<col<<std::endl;
 	//ai::printMarker();
     std::cout << std::endl;
     std::cout << "Building A matrix... ";
@@ -1746,7 +1759,7 @@ int planar3D(
 
     std::cout << "Ribbons: " << ribbons.size() << "." << std::endl;
 
-    std::vector<double> openingNew = opening;
+    std::vector<double> openingNew ;
     std::vector< std::vector<double> > partialInfluenceMatrix ;
 
 
@@ -1755,9 +1768,9 @@ int planar3D(
     partialInfluenceMatrix = influenceMatrix;
     ///////////////////////////
     //std::cout << "Building partial influence matrix... ";
-
-    // buildPartialInfluenceMatrix(influenceMatrix, activeElements, opening, openingNew,
-    //     partialInfluenceMatrix, index);
+    // ai::saveVector("preopen", opening);
+    buildPartialInfluenceMatrix(influenceMatrix, activeElements, opening, openingNew,
+        partialInfluenceMatrix, index);
 
     //std::cout << "OK." << std::endl;
 

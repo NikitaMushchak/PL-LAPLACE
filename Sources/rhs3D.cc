@@ -26,14 +26,14 @@ void conjGrad(std::vector<double> &x,
     r1 = b;
     p = r1;
     double eps = 1.;
-    size_t n_iter = 1;
+    //size_t n_iter = 1;
 
     std::vector<double> A_p(N_dof , 0.);
 
     double alpha;
     double beta;
 
-     //while(0.01 < eps){
+     while(0.01 < eps){
         //ai::saveVector("p", p);
         multiplyDiag(A_p, A, p, Nx , NxNy , N_dof);
         //ai::saveVector("A_p ", A_p);
@@ -58,9 +58,9 @@ void conjGrad(std::vector<double> &x,
         eps = NormV(r2)/NormV(x);
 
         //residual.push_back(eps);
-        ++n_iter;
+        //++n_iter;
 
-    // }
+    }
 }
 
 
@@ -181,36 +181,38 @@ void calculatePressure(
 
     std::vector<double> b(N_dof , 0.);
 
-    for(size_t i = 0 ; i < Nx; ++i){
-        for(size_t j = 0 ; j < Ny; ++j){
-            b[i+Nx*j] = opening[j+Ny*i];
-        }
-    }
+    // ai::saveVector("cop", opening);
 
-
-    std::cout<<"N_dof = "<<N_dof<<" Nx = "<<Nx<<"  Ny = "<<Ny<<std::endl;
-    ai::saveMatrix("inf",influenceMatrix);
-    ai::saveVector("b", b);
-    conjGrad(T, influenceMatrix, b, Nx , Nx*Ny , N_dof);
-
-    ai::saveVector("T", T);
-    //std::cout<<"act Elements size = "<<activeElements.size()<<std::endl;
-    //ai::saveMatrix("actEl", activeElements);
-    std::vector<double> press(N_dof, 0.);
-    for(size_t i =0 ; i < Nx;++i){
-        for(size_t j = 0 ; j < Ny;++j){
-            press[i+Nx*j] = (0.5*1./(1.- 0.25*0.25)) * (-b[i+Nx*j] - T[i + j*Nx] )/dx;
-        }
-    }
-
-    ai::saveVector("press", press);
     for(std::size_t k = 0; k < activeElements.size(); ++k){
         const size_t i = activeElements[k][0];
         const size_t j = activeElements[k][1];
-        // pressure[index[i][j]] = partialPressure[k] / dx + stress[j];
-        pressure[index[i][j]] = -press[i+Nx*j]/dx ;//+stress[j];
+
+        b[i+Nx*j] = -0.5*opening[k];
     }
-    ai::saveVector("pr", pressure);
+
+    // std::cout<<"N_dof = "<<N_dof<<" Nx = "<<Nx<<"  Ny = "<<Ny<<std::endl;
+    // ai::saveMatrix("inf",influenceMatrix);
+    // ai::saveVector("b", b);
+    conjGrad(T, influenceMatrix, b, Nx , Nx*Ny , N_dof);
+
+    // ai::saveVector("T", T);
+    //std::cout<<"act Elements size = "<<activeElements.size()<<std::endl;
+    //ai::saveMatrix("actEl", activeElements);
+    std::vector<double> press(N_dof, 0.);
+    for(size_t i =0 ; i < Nx; ++i){
+        for(size_t j = 0 ; j < Ny;++j){
+            press[i+Nx*j] = (0.5*1./(1.- 0.25*0.25)) * (-b[i+Nx*j] - T[i + Nx*j] )/dx;
+        }
+    }
+
+    // ai::saveVector("press", press);
+    for(std::size_t k = 0; k < activeElements.size(); ++k){
+        const size_t i = activeElements[k][0];
+        const size_t j = activeElements[k][1];
+    
+        pressure[ index[i][j] ] = press[i+Nx*j] / dx + stress[j];
+    }
+    // ai::saveVector("pr", pressure);
 }
 
 /*!
@@ -325,7 +327,8 @@ void calculateOpeningAndConcentrationSpeeds(
 
     dCdt.resize(concentration.size());
     std::fill(dCdt.begin(), dCdt.end(), 0.);
-
+    // std::cout<<"Active Elements size = "<<activeElements.size()<<std::endl;
+    // ai::saveMatrix("index",index);
     const double WPow = (2. * n + 1.) / n;
     const double PPow = 1. / n;
 
@@ -444,11 +447,24 @@ void calculateOpeningAndConcentrationSpeeds(
                 }
             }
         }
+        // if(index[i][j] == 59){
+        //
+        //     std::cout<<" pre dWdt[index[i][j]] = "<<dWdt[index[i][j]]<<std::endl;
+        // }
 
         dWdt[index[i][j]] += (fluidFlowRight + fluidFlowBottom) / dx
             - leakOff[j] / std::sqrt(currentTime - activationTime[k]);
         dWdt[index[i + 1][j]] -= fluidFlowRight / dx;
         dWdt[index[i][j + 1]] -= fluidFlowBottom / dy;
+
+        // if(index[i][j] == 59){
+        //     std::cout<<"fluidFlowRight = "<<fluidFlowRight<<" fluidFlowBottom = "<<fluidFlowBottom<<std::endl;
+        //     std::cout<<"dx = "<<dx<<std::endl;
+        //     std::cout<<"leakOff[j] = "<<leakOff[j]<<std::endl;
+        //     std::cout<<"std::sqrt(currentTime - activationTime[k])  = "<<std::sqrt(currentTime - activationTime[k])<<std::endl;
+        //     std::cout<<"leakOff[j] / std::sqrt(currentTime - activationTime[k]) = "<<leakOff[j] / std::sqrt(currentTime - activationTime[k])<<std::endl;
+        //     std::cout<<"dWdt[index[i][j]] = "<<dWdt[index[i][j]]<<std::endl;
+        // }
 
         dCdt[index[i][j]] += (proppantFlowRight + proppantFlowBottom + settlingFlow) / dx;
         dCdt[index[i + 1][j]] -= proppantFlowRight / dx;
