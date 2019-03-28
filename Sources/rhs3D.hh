@@ -29,9 +29,15 @@ void calculatePressure(
     std::vector< std::vector<double> > &influenceMatrix,
     std::vector<double> &opening,
     std::vector<double> &stress,
-    std::size_t  N_dof,
-    std::size_t  Nx,
-    std::size_t  Ny
+    std::vector<double> &T,
+    std::vector<double> &b,
+    std::vector<double> &r1,
+    std::vector<double> &r2,
+    std::vector<double> &p,
+    std::vector<double> &A_p,
+    size_t N_dof,
+    size_t Nx,
+    size_t Ny
 );
 /*!
  \brief Расчет скорости фронта

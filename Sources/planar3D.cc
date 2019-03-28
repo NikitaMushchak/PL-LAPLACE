@@ -618,16 +618,17 @@ int calculateEverything(
     const bool saveSteps,
     const bool runningFromGUI,
     const bool override,
+    std::vector<double> &T1,
+    std::vector<double> &b,
+    std::vector<double> &r1,
+    std::vector<double> &r2,
+    std::vector<double> &p,
+    std::vector<double> &A_p,
     size_t &N_dof,
     size_t &Nx,
     size_t &Ny,
     size_t &Nz
 ){
-
-
-    double dx = x[1]-x[0];
-    double dy = y[1]-y[0];
-    std::cout<<"dx = "<<dx <<" dy = "<<dy<<std::endl;
 
     alpha = 2. / (n + 2.);
     double BAlpha = 0.25 * alpha * tan(0.5 * M_PI - M_PI * (1 - alpha));
@@ -687,10 +688,10 @@ int calculateEverything(
 
 	// std::vector<double> val1;
 	// std::vector<double> val2;
-    size_t iter=0;
+    // size_t iter=0;
     while(modelingTime >= T && meshIsNotExhausted){
 		// ai::printLine("1");
-        iter++;
+        // iter++;
         // if(iter == 1 ){
         // meshIsNotExhausted=0;
         // }
@@ -711,11 +712,16 @@ int calculateEverything(
             partialInfluenceMatrix,
             openingNew,
             stress,
+            T1,
+            b,
+            r1,
+            r2,
+            p,
+            A_p,
             N_dof,
             Nx,
             Ny
         );
-
 		 // ai::saveVector("openingnew",openingNew);
 		 // ai::saveVector("pressure",pressure);
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
@@ -879,7 +885,9 @@ int calculateEverything(
                     dx / (20. * dt * ai::max(velocities))
                 );
             }
- std::cout<<"step to check!!!!!!!!!!!"<<std::endl;
+            // std::cout<<" "<<std::endl;
+            // std::cout<<"step to check!!!!!!!!!!!"<<std::endl;
+            // std::cout<<"time= "<<T<<std::endl;
             const size_t savedSize = activeElements.size();
 
             std::vector<Ribbon> oldRibbons = ribbons;
@@ -955,7 +963,7 @@ int calculateEverything(
 
             calculateCrackGeometry(mesh, distances, length, height);
 
-            std::cout<<"length = "<<length<<"   heigth = "<<height<<std::endl;
+            // std::cout<<"length = "<<length<<"   heigth = "<<height<<std::endl;
 
             if(Nx * dx < (3./2.)*length/2. || (Ny+1) * dy < (3./2.)*height){
 
@@ -963,16 +971,48 @@ int calculateEverything(
                 Ny = (3./2.)*std::ceil(height)-1;
                 Nz = Nx;
                 N_dof = Nx*Ny*Nz;
-                std::cout<<"Nx = "<<Nx<<"  Ny  = "<<Ny<<" Nz = "<<Nz<<" N_dof = "<<N_dof<<std::endl;
-                partialInfluenceMatrix.resize(N_dof);
-                for(size_t i =0 ; i <N_dof; ++i){
-                    partialInfluenceMatrix[i].resize(7);
+                // std::cout<<"Nx = "<<Nx<<"  Ny  = "<<Ny<<" Nz = "<<Nz<<" N_dof = "<<N_dof<<std::endl;
+
+                size_t oldsize  = T1.size();
+
+                int difsize = N_dof - oldsize;
+
+                if(difsize > 0){
+                    partialInfluenceMatrix.resize(N_dof);
+                    for(size_t i = 0 ; i < N_dof; ++i){
+                        partialInfluenceMatrix[i].resize(7);
+                    }
+                    createMatrixDiag(partialInfluenceMatrix, N_dof, Nx , Ny, Nz);
+
+                    for(size_t i = 0 ; i< difsize; ++i){
+                        T1.push_back(0.);
+                        b.push_back(0.);
+                        r1.push_back(0.);
+                        r2.push_back(0.);
+                        p.push_back(0.);
+                        A_p.push_back(0.);
+                    }
                 }
-                createMatrixDiag(partialInfluenceMatrix, N_dof, Nx , Ny, Nz);
-                ai::printMarker();
-                std::cout<<"create new martix"<<std::endl;
-                //
-                ai::saveMatrix("Matrix", partialInfluenceMatrix);
+                else{
+                    if(difsize < 0){
+                        partialInfluenceMatrix.resize(N_dof);
+                        for(size_t i = 0 ; i < N_dof; ++i){
+                            partialInfluenceMatrix[i].resize(7);
+                        }
+                        createMatrixDiag(partialInfluenceMatrix, N_dof, Nx , Ny, Nz);
+
+                        T1.resize(N_dof);
+                        b.resize(N_dof);
+                        r1.resize(N_dof);
+                        r2.resize(N_dof);
+                        p.resize(N_dof);
+                        A_p.resize(N_dof);
+                    }
+                }
+
+                // std::cout<<"create new martix"<<std::endl;
+
+                //ai::saveMatrix("Matrix", partialInfluenceMatrix);
             }
 
             fracture.push_back(
@@ -985,7 +1025,7 @@ int calculateEverything(
                     length / height
                 }
             );
-            std::cout<<"aaaaa"<<std::endl;
+            //std::cout<<"aaaaa"<<std::endl;
             if(0 == regime){
                 savedDistances.resize(ribbons.size());
 
@@ -1188,9 +1228,9 @@ int calculateEverything(
     timeMeasurements[8] = ai::duration(startTime, finishTime, "us");
     #endif
 
-    //#if !defined(BUILD_DLL)
-    #if defined(BUILD_DLL)
-    if(meshIsNotExhausted=0){
+    #if !defined(BUILD_DLL)
+    //#if defined(BUILD_DLL)
+    if(meshIsNotExhausted==0){
         if(runningFromGUI){
             std::cout << "Progress: 1.0" << std::endl;
         }else{
@@ -1199,7 +1239,7 @@ int calculateEverything(
 
         std::cout << " "<< std::endl;
     }else{
-        if(runningFromGUI=0){
+        if(runningFromGUI==0){
             std::cout << "Progress: " << (T - T0) / (modelingTime - T0) << std::endl;
         }else{
             ai::showProgressBar((T - T0) / (modelingTime - T0));
@@ -1664,7 +1704,12 @@ int planar3D(
    size_t N_dof = Nx * Ny * Nz;
 
 
-
+   std::vector<double> T1(N_dof, 0.);
+   std::vector<double> b(N_dof, 0.);
+   std::vector<double> r1(N_dof, 0.);
+   std::vector<double> r2(N_dof, 0.);
+   std::vector<double> p(N_dof, 0.);
+   std::vector<double> A_p(N_dof, 0.);
 
    std::vector<std::vector<double> > influenceMatrix; // matrix corresponding to finite difference discretization of Laplace equation (AT = b)
    influenceMatrix.resize(N_dof);                     //. Nonzero elements are stored only.
@@ -1845,6 +1890,12 @@ int planar3D(
         saveSteps,
         runningFromGUI,
         override,
+        T1,
+        b,
+        r1,
+        r2,
+        p,
+        A_p,
         N_dof,
         Nx,
         Ny,

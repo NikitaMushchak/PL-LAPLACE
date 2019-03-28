@@ -16,34 +16,37 @@
 void conjGrad(std::vector<double> &x,
                     std::vector<std::vector<double> >&A,
                             std::vector<double>&b,
+                            std::vector<double>&r1,
+                            std::vector<double>&r2,
+                            std::vector<double>&p,
+                            std::vector<double>&A_p,
                             size_t Nx , size_t NxNy , size_t N_dof){
 
-    //std::vector<double> residual;
-    std::vector<double> r1(N_dof, 0.);
-    std::vector<double> r2(N_dof, 0.);
-    std::vector<double> p(N_dof, 0.);
+    //std::fill(r1.begin(), r1.end(), 0.);
+    // std::fill(r2.begin(), r2.end(), 0.);
+    // //std::fill(p.begin(), p.end(), 0.);
+    // std::fill(A_p.begin(), A_p.end(), 0.);
+    for(size_t i = 0 ; i< N_dof; ++i){
+        r2[i]= 0.;
+        A_p[i] = 0.;
+    }
 
     r1 = b;
     p = r1;
     double eps = 1.;
-    //size_t n_iter = 1;
-
-    std::vector<double> A_p(N_dof , 0.);
 
     double alpha;
     double beta;
 
-     while(0.01 < eps){
-        //ai::saveVector("p", p);
+     while(0.0001 < eps){
+
         multiplyDiag(A_p, A, p, Nx , NxNy , N_dof);
-        //ai::saveVector("A_p ", A_p);
+
         alpha = MultiplyVV(r1,r1)/MultiplyVV(A_p,p);
 
         for(size_t i = 0 ; i< x.size() ;++i){
             x[i]+= alpha*p[i];
-        }
 
-        for(size_t i = 0 ; i < r2.size(); i++){
             r2[i] = r1[i] - alpha * A_p[i];
         }
 
@@ -56,15 +59,10 @@ void conjGrad(std::vector<double> &x,
         r1 = r2;
 
         eps = NormV(r2)/NormV(x);
-
-        //residual.push_back(eps);
-        //++n_iter;
-
     }
 }
 
-
-void multiplyDiag(std::vector<double> &y, std::vector<std::vector<double> >&A,std::vector<double >&x,
+ void multiplyDiag(std::vector<double> &y, std::vector<std::vector<double> >&A,std::vector<double >&x,
                         size_t Nx , size_t NxNy , size_t N_dof){
 
     y[0] = A[0][3]*x[0] + A[0][4]*x[1];
@@ -90,7 +88,7 @@ void multiplyDiag(std::vector<double> &y, std::vector<std::vector<double> >&A,st
    }
 }
 
-double MultiplyVV(std::vector<double>&a, std::vector<double>&b){
+ double MultiplyVV(std::vector<double>&a, std::vector<double>&b){
 
     double c = 0.;
     for(size_t i = 0; i < a.size(); i++){
@@ -99,55 +97,13 @@ double MultiplyVV(std::vector<double>&a, std::vector<double>&b){
     return c;
 }
 
-double NormV(std::vector<double>&x){
+ double NormV(std::vector<double>&x){
     double a = 0.;
     for(size_t i = 0 ; i< x.size(); ++i){
         a = a + x[i]*x[i];
     }
-    return sqrt(a);
+    return a;
 }
-
-
-
-inline void multiply(
-    std::vector< std::vector<double> > &matrix,
-    std::vector<double> &vector,
-    std::vector<double> &result
-){
-    int size = (int) vector.size();
-
-    result.resize(size);
-
-    #pragma omp parallel for
-    for(int i = 0; i < size; ++i){
-          int j = 0;
-
-        for(; j <= size - 16; j += 16){
-            result[i] += matrix[i][j] * vector[j]
-                + matrix[i][j + 1] * vector[j + 1]
-                + matrix[i][j + 2] * vector[j + 2]
-                + matrix[i][j + 3] * vector[j + 3]
-                + matrix[i][j + 4] * vector[j + 4]
-                + matrix[i][j + 5] * vector[j + 5]
-                + matrix[i][j + 6] * vector[j + 6]
-                + matrix[i][j + 7] * vector[j + 7]
-                + matrix[i][j + 8] * vector[j + 8]
-                + matrix[i][j + 9] * vector[j + 9]
-                + matrix[i][j + 10] * vector[j + 10]
-                + matrix[i][j + 11] * vector[j + 11]
-                + matrix[i][j + 12] * vector[j + 12]
-                + matrix[i][j + 13] * vector[j + 13]
-                + matrix[i][j + 14] * vector[j + 14]
-                + matrix[i][j + 15] * vector[j + 15];
-        }
-
-        for(; j < size; ++j){
-            result[i] += matrix[i][j] * vector[j];
-        }
-    }
-}
-
-
 
 /*!
  \details Функция рассчитывает давление в активных элементах с помощью матрицы
@@ -167,18 +123,29 @@ void calculatePressure(
     std::vector< std::vector<double> > &influenceMatrix,
     std::vector<double> &opening,
     std::vector<double> &stress,
+    std::vector<double> &T,
+    std::vector<double> &b,
+    std::vector<double> &r1,
+    std::vector<double> &r2,
+    std::vector<double> &p,
+    std::vector<double> &A_p,
     size_t N_dof,
     size_t Nx,
     size_t Ny
 ){
+
     std::fill(pressure.begin(), pressure.end(), 0.);
     //ai::printMarker();
     //std::vector<double> partialPressure(N_dof, 0.);;
-    std::vector<double> T(N_dof, 0.);  // unknowns in  finite difference discretization of Laplace equation (AT = b)
-
-    std::vector<double> b(N_dof , 0.);
-
+    //std::vector<double> T(N_dof, 0.);  // unknowns in  finite difference discretization of Laplace equation (AT = b)
+    //std::fill(T.begin(), T.end(), 0.);
+    //std::vector<double> b(N_dof , 0.);
+    //std::fill(b.begin(), b.end(), 0.);
     // ai::saveVector("cop", opening);
+    for(size_t i = 0 ; i<N_dof ; ++i){
+        T[i] = 0.;
+        b[i] = 0.;
+    }
 
     for(std::size_t k = 0; k < activeElements.size(); ++k){
         const size_t i = activeElements[k][0];
@@ -190,24 +157,35 @@ void calculatePressure(
     // std::cout<<"N_dof = "<<N_dof<<" Nx = "<<Nx<<"  Ny = "<<Ny<<std::endl;
     // ai::saveMatrix("inf",influenceMatrix);
     // ai::saveVector("b", b);
-    conjGrad(T, influenceMatrix, b, Nx , Nx*Ny , N_dof);
 
+    
+    conjGrad(T,
+             influenceMatrix,
+             b,
+             r1,
+             r2,
+             p,
+             A_p,
+             Nx,
+             Nx*Ny,
+             N_dof
+             );
     // ai::saveVector("T", T);
     //std::cout<<"act Elements size = "<<activeElements.size()<<std::endl;
     //ai::saveMatrix("actEl", activeElements);
-    std::vector<double> press(N_dof, 0.);
-    for(size_t i =0 ; i < Nx; ++i){
-        for(size_t j = 0 ; j < Ny;++j){
-            press[i+Nx*j] = (0.5*1./(1.- 0.25*0.25)) * (-b[i+Nx*j] - T[i + Nx*j] )/dx;
-        }
-    }
+    // std::vector<double> press(N_dof, 0.);
+    // for(size_t i =0 ; i < Nx; ++i){
+    //     for(size_t j = 0 ; j < Ny;++j){
+    //         press[i+Nx*j] = (0.5*1./(1.- 0.25*0.25)) * (-b[i+Nx*j] - T[i + Nx*j] )/dx;
+    //     }
+    // }
 
     // ai::saveVector("press", press);
     for(std::size_t k = 0; k < activeElements.size(); ++k){
         const size_t i = activeElements[k][0];
         const size_t j = activeElements[k][1];
-
-        pressure[ index[i][j] ] = press[i+Nx*j] / dx + stress[j];
+                                    // E        nu * nu
+        pressure[ index[i][j] ] = (0.5*1./(1.- 0.25*0.25)) * (- b[i+Nx*j] - T[i + Nx*j] )/dx + stress[j];
     }
     // ai::saveVector("pr", pressure);
 }
