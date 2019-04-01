@@ -8,7 +8,7 @@
  \brief Версия программы
  \details Текущая версия программы (SemVer)
 */
-std::string version("3.4.0");
+std::string version("3.6.0");
 
 #if defined(_MSC_VER)
     std::string compiler(ai::string("msc") + ai::string(_MSC_VER));
@@ -56,19 +56,18 @@ int main(const int argc, const char *argv[]){
 
     bool override = false;
     bool saveSteps = false;
-    bool runningFromGUI = false;
     bool considerElasticModulusContrast = false;
 
-    std::string pathToLayersFile("./InitialConditions/layers.txt");
-    std::string pathToInjectionFile("./InitialConditions/injection.txt");
-    std::string pathToImportFolder = std::string();
+    std::string pathToLayersFile("layers.txt");
+    std::string pathToInjectionFile("injection.txt");
+    std::string pathToImportFolder = std::string("./InitialConditions");
 
     std::size_t numberOfThreads = (std::size_t) omp_get_max_threads();
 
     int meshScalingCounter = -1;
 
-    double cellSize = 1.;
-    double meshSize = 14.;
+    double cellSize = -1.;
+    double meshSize = 30.;
     double time = 25.0;
     double timeStep = -1.;
     double timeScale = 60.;
@@ -111,11 +110,6 @@ int main(const int argc, const char *argv[]){
                 << "    --name                print program name and exit"
                 << std::endl
                 << "    --list-errors         print possible errors ans exit"
-                << std::endl << std::endl
-
-                << "  Shelf parameters" << std::endl
-                << "    --Kic=<value>         stress intensity factor "
-                << "[double, MPa/m^0.5]"
                 << std::endl << std::endl
 
                 << "  Time parameters" << std::endl
@@ -170,8 +164,6 @@ int main(const int argc, const char *argv[]){
                 << "    --import=<path>       import data from folder [string]"
                 << std::endl
                 << "    --import              default import from ./Results"
-                << std::endl
-                << "    --env=gui             flag for FractureGUI"
                 << std::endl;
 
             return 0;
@@ -184,17 +176,6 @@ int main(const int argc, const char *argv[]){
                 << "    Code 12. Mesh size is less than 10 cells."
                 << std::endl
                 << "    Code 13. Mesh size is not a positive integer."
-                << std::endl
-                << "    Code 14. Carter coefficient isn't positive in a "
-                << "leak-off dominated regime."
-                << std::endl
-                << "    Code 15. Stress intensity factor isn't positive in a "
-                << "toughness dominated "
-                << std::endl
-                << "             regime."
-                << std::endl
-                << "    Code 16. Viscosity isn't positive in a "
-                << "viscosity dominated regime."
                 << std::endl
                 << "    Code 17. Time step isn't a positive value."
                 << std::endl << std::endl
@@ -238,14 +219,13 @@ int main(const int argc, const char *argv[]){
                 "--mesh-scale=",
                 meshScalingCounter
             )
+            || ai::assignParameter(
+                argv[i],
+                "--import=",
+                pathToImportFolder
+            )
             || ai::assignParameter(argv[i], "--threads=", numberOfThreads)
         ){
-            continue;
-        }
-
-        if(ai::assignAbsDoubleParameter(argv[i], "--Kic=", Kic)){
-            Kic *= std::pow(10., 6);
-
             continue;
         }
 
@@ -291,12 +271,6 @@ int main(const int argc, const char *argv[]){
             continue;
         }
 
-        if("--env=gui" == std::string(argv[i])){
-            runningFromGUI = true;
-
-            continue;
-        }
-
         if("--override" == std::string(argv[i])){
             override = true;
 
@@ -323,14 +297,6 @@ int main(const int argc, const char *argv[]){
         return 13;
     }
 
-    if(TOUGHNESS == regime && epsilon > Kic && !override){
-        std::cerr << "Stress intensity factor should be positive in a "
-            << "toughness dominated regime."
-            << std::endl;
-
-        return 15;
-    }
-
     if(0 > timeStep && -1. != timeStep && !override){
         std::cerr << "Time step should be a positive value." << std::endl;
 
@@ -342,10 +308,14 @@ int main(const int argc, const char *argv[]){
     }
 
     /// \todo time, mesh, data, settings
+    #if defined(BUILD_DLL)
+    return 0;
+    #else
     return planar3D(
-        time, timeStep, timeScale, cellSize, meshSize, meshScalingCounter,
-        pathToLayersFile, pathToInjectionFile, pathToImportFolder,
-        considerElasticModulusContrast, saveSteps, runningFromGUI,
-        numberOfThreads, override
+       time, timeStep, timeScale, cellSize, meshSize, meshScalingCounter,
+       pathToLayersFile, pathToInjectionFile, pathToImportFolder,
+       considerElasticModulusContrast, saveSteps, false,
+       numberOfThreads, override
     );
+    #endif
 }

@@ -4,6 +4,9 @@
 #include <string>
 #include <vector>
 
+ // #define BUILD_DLL
+
+#include "io.hh"
 
 #if !defined M_PI
     /*!
@@ -91,12 +94,6 @@ extern double proppantInjection;
  \details Эффективный плоский модуль Юнга
 */
 extern double E;
-
-/*!
- \brief Эффективная трещиностойкость
- \details Эффективная трещиностойкость
-*/
-extern double Kic;
 
 /*!
  \brief Значение амплитуды для асимптотического зонтика
@@ -201,9 +198,119 @@ class Cell{
             this->y = y;
         }
 };
-void ApproximateLayers(
-    std::vector<std::vector<double> >&layers
-    );
+
+class Fluid_Param
+{
+	//"0": "KEY",
+	//"1" : "CODE",
+	//"2" : "NAME",
+	//"3" : "SPECIFIC_GRAVITY",		Относительная плотность[д.ед.]
+	//"4" : "SHEAR_RATE",			Скорость сдвига[1 / с]
+	//"5" : "SPECIFIC_HEAT",		Удельная теплоемкость[Дж / кг * К]
+	//"6" : "RHEOLOGY_TABLE",
+	//"7" : "FRICTION_TABLE"
+
+public:
+	std::string KEY = std::string();
+	std::string CODE = std::string();
+	//Вектор зависимости реология жидкости от температуры
+	//[1] - температура
+	//[2] - K [Па*cек^n] динамическая вязкость
+	//[3] - n реология
+	//[4] - Эффективная вязкость [Па*cек^n]
+	std::vector <std::vector<double>> rheology;
+
+	double SPECIFIC_GRAVITY = -1.;						//Относительная плотность [д.ед.]
+	double SHARE_RATE = -1.;							//Скорость сдвига [1/с]
+	double SPECIFIC_HEAT = -1.;							//Удельная теплоемкость [Дж/кг*К]
+
+
+
+														//конструктор
+	void setReology(
+		std::string KEY,
+		std::string CODE,
+		double SPECIFIC_GRAVITY,
+		double SHARE_RATE,
+		double SPECIFIC_HEAT,
+		std::vector <std::vector<double>> rheology
+
+	) {
+		this->KEY = KEY;
+		this->CODE = CODE;
+		this->SPECIFIC_GRAVITY = SPECIFIC_GRAVITY;
+		this->SPECIFIC_HEAT = SPECIFIC_HEAT;
+		this->rheology = rheology;
+	};
+};
+
+class Proppant_Param
+{
+	//"1" : "CODE",
+	//"4" : "DIAMETER",
+	//"5" : "SPECIFIC_GRAVITY",
+	//"6" : "BULK_GRAVITY",
+	//"7" : "CRITICAL_DENSITY",
+	//"8" : "SPECIFIC_HEAT",
+	//"9" : "EMBEDMENT_RATIO"
+	//"10" : "SETTLING_VELOSITY_FACTOR",
+	//"11" : "DRIFT_VELOSITY_FACTOR",
+public:
+	std::string KEY = std::string();
+	std::string CODE = std::string();
+	double DIAMETER = -1.;								//Средний диаметр пропанта [мм]
+	double SPECIFIC_GRAVITY = -1.;						//Относительная плотность [д.ед.]
+	double BULK_GRAVITY = -1.;							//Относительная насыпная плотность [д.ед.]
+	double CRITICAL_DENSITY = -1.;						//Критическая концентрация [д.ед.]
+	double SPECIFIC_HEAT = -1.;							//Удельная теплоемкость [Дж/кг*К]
+	double EMBEDMENT_RATIO = -1.;						//Ширина остаточной проводимости [д.ед.]
+	double SETTLING_VELOSITY_FACTOR = -1.;				//Коэффициент скорости осаждения [д.ед.]
+	double DRIFT_VELOSITY_FACTOR = -1.;					//Коэффициент скорости дрейфа [д.ед.]
+	void setCoordinates(const std::string KEY,
+		const std::string CODE,
+		const double DIAMETER,
+		const double SPECIFIC_GRAVITY,
+		const double BULK_GRAVITY,
+		const double CRITICAL_DENSITY,
+		const double SPECIFIC_HEAT,
+		const double EMBEDMENT_RATIO,
+		const double SETTLING_VELOSITY_FACTOR,
+		const double DRIFT_VELOSITY_FACTOR) {
+		this->KEY = KEY;
+		this->CODE = CODE;
+		this->DIAMETER = DIAMETER;
+		this->SPECIFIC_GRAVITY = SPECIFIC_GRAVITY;
+		this->BULK_GRAVITY = BULK_GRAVITY;
+		this->CRITICAL_DENSITY = CRITICAL_DENSITY;
+		this->SPECIFIC_HEAT = SPECIFIC_HEAT;
+		this->EMBEDMENT_RATIO = EMBEDMENT_RATIO;
+		this->SETTLING_VELOSITY_FACTOR = SETTLING_VELOSITY_FACTOR;
+		this->DRIFT_VELOSITY_FACTOR = DRIFT_VELOSITY_FACTOR;
+	};
+};
+
+struct DLL_Param
+{
+	std::string J_String = std::string();
+	std::string IdDesign = std::string();
+	std::string IdStage = std::string();
+	double modelingTime = -1.;
+	double Emit_time = -1.;
+	double Z_coordinate = -1.;
+	enum State
+	{
+		Idle = 0,		//не считает
+		Running = 1,	//В работе
+		Paused = 2,		//Остановлен
+	};
+	int Dll_State = Idle;
+	std::vector<Proppant_Param> ProppantParam;
+	std::vector<Fluid_Param> FluidParam;
+};
+
+
+
+
 /*!
  \brief Название режима распространения
 */
@@ -218,6 +325,12 @@ void printLogo();
  \brief Основная расчетная функция
 */
 int planar3D(
+    #if defined(BUILD_DLL)
+    DLL_Param &DLL_Parametrs,
+    std::vector< std::vector<double> > &layers,
+    std::vector< std::vector<double> > &injection,
+    bool &initialized
+    #else
     double modelingTime,
     double timeStep,
     const double timeScale,
@@ -232,6 +345,7 @@ int planar3D(
     const bool runningFromGUI,
     const std::size_t numberOfThreads,
     const bool override
+    #endif
 );
 
 /*!
@@ -257,22 +371,4 @@ void calculateEfficiency(
     const std::vector< std::vector<std::size_t> > &index,
     const double T,
     const double T0
-);
-
-/*!
- \brief Сохранение результатов в формате json
-*/
-void SaveJson(
-    const std::string filename,
-    std::vector<double> &Wk,
-    double wn,
-    std::vector<double> &pressure,
-    std::vector<double>&concentration,
-    std::vector< std::vector<size_t> > &index,
-    double Time,
-    double timeScale,
-    double fluidEfficiency,
-    double fluidDensity,
-    double proppantDensity,
-    double nominalStress
 );

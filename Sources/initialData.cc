@@ -105,15 +105,15 @@ bool setInitialData(
 
             ai::parseFileInMatrix(pathToLayersFile, ' ', layers);
 
-            if(2 > layers.size() || 6 > layers[0].size()){
+            if(2 > layers.size() || 7 > layers[0].size()){
                 std::cerr << "Cannot open '" << pathToLayersFile
                     << ", file is not appropriate." << std::endl;
 
                 return false;
             }
-            if(layers[0][0] < 1){
+            if(layers[0][0] < 2){
                 std::cerr << "Cannot open '" << pathToInjectionFile << ", "
-                    << "standard version should be at least 1.0.0 "
+                    << "standard version should be at least 2.0.0 "
                     << "for this type of file." << std::endl;
 
                 return false;
@@ -456,6 +456,47 @@ bool recalculateLeakOffContrast(
     return true;
 }
 
+bool recalculateToughnessContrast(
+    const std::vector< std::vector<double> > &layers,
+    std::vector<double> &toughness,
+    const std::vector<double> &y
+){
+    std::vector<double> coordinates;
+    std::vector<double> coefficients;
+
+    for(int i = layers.size() - 1; i >= 0; --i){
+        coordinates.push_back(layers[i][0]);
+        coordinates.push_back(layers[i][1] - 0.001);
+        coefficients.push_back(layers[i][6]);
+        coefficients.push_back(layers[i][6]);
+    }
+
+    try{
+        createLinearOperator(coordinates, coefficients);
+    }catch(const std::exception &error){
+        std::cerr << "Error during calculations of the linear operator for "
+            << "toughness contrast." << std::endl;
+
+        std::cerr << error.what() << std::endl;
+
+        return false;
+    }
+
+    toughness.clear();
+
+    for(std::size_t i = 0; i < y.size(); ++i){
+        toughness.push_back(
+            calculateValueWithLinearOperator(
+                y[i],
+                coordinates,
+                coefficients
+            )
+        );
+    }
+
+    return true;
+}
+
 /*!
  \details Функция сохраняет начальные параметры в файл формата JSON по
  установленному шаблону
@@ -560,7 +601,7 @@ void saveInitialData(
     output << indent() << "\"layers\": {" << std::endl;
     ++indentLevel;
         for(size_t i = 0; i < layers.size(); ++i){
-            if(layers[i].size() != 6){
+            if(layers[i].size() != 7){
                 throw std::runtime_error(
                     ai::string("Exception in size of the vector: layers")
                 );
@@ -579,8 +620,10 @@ void saveInitialData(
                     << layers[i][3] << "," << std::endl;
                 output << indent() << "\"Poisson's ratio\": "
                     << layers[i][4] << "," << std::endl;
+                output << indent() << "\"toughness factor\": "
+                    << layers[i][5] << "," << std::endl;
                 output << indent() << "\"Carter's coefficient\": "
-                    << layers[i][5] << std::endl;
+                    << layers[i][7] << std::endl;
             --indentLevel;
             output << indent() << "}";
             if(layers.size() > i + 1){

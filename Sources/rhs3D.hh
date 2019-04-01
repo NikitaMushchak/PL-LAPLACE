@@ -5,28 +5,59 @@
 /*!
  \brief Умножение матрицы на вектор
 */
-inline void multiply(
-    std::vector< std::vector<double> > &matrix,
-    std::vector<double> &vector,
-    std::vector<double> &result
-);
+// inline void multiply(
+//     std::vector< std::vector<double> > &matrix,
+//     std::vector<double> &vector,
+//     std::vector<double> &result
+// );
 
 /*!
  \brief Расчет давления в активных элементах
 */
-// void calculatePressure(
-//     std::vector<double> &pressure,
-//     std::vector< std::vector<std::size_t> > &index,
-//     std::vector< std::vector<std::size_t> > &activeElements,
-//     std::vector< std::vector<double> > &influenceMatrix,
-//     std::vector<double> &opening,
-//     std::vector<double> &stress
-// );
+
+
+void multiplyDiag(std::vector<double> &y,
+                        //std::vector<double>& A0,
+                        std::vector<double>& A1,
+                        std::vector<double>& A2,
+                        std::vector<double>& A3,
+                        std::vector<double>& A4,
+                        std::vector<double>& A5,
+                        //std::vector<double>& A6,
+                        std::vector<double >&x,
+                        size_t Nx,
+                        size_t NxNy,
+                        size_t N_dof);
+
+double MultiplyVV(std::vector<double>&a, std::vector<double>&b);
+
+double NormV(std::vector<double>&x);
+
+void conjGrad(std::vector<double> &x,                   // выход функции
+                            //std::vector<double>& A0,
+                            std::vector<double>& A1,
+                            std::vector<double>& A2,
+                            std::vector<double>& A3,
+                            std::vector<double>& A4,
+                            std::vector<double>& A5,
+                            //std::vector<double>& A6,// семидиагональная матрица
+                            std::vector<double>& b,       // вектор раскрытий
+                            std::vector<double>& r1,
+                            std::vector<double>& r2,
+                            std::vector<double>& p,
+                            std::vector<double>& A_p,
+                            size_t Nx , size_t NxNy , size_t N_dof);
+
+
 void calculatePressure(
     std::vector<double> &pressure,
-    std::vector< std::vector<std::size_t> > &index,
-    std::vector< std::vector<std::size_t> > &activeElements,
-    std::vector< std::vector<double> > &influenceMatrix,
+    std::vector<std::vector<std::size_t> > &index,
+    std::vector<std::vector<std::size_t> > &activeElements,
+    std::vector<double>& A1,
+    std::vector<double>& A2,
+    std::vector<double>& A3,
+    std::vector<double>& A4,
+    std::vector<double>& A5,
     std::vector<double> &opening,
     std::vector<double> &stress,
     std::vector<double> &T,

@@ -95,18 +95,18 @@ void buildInfluenceMatrix(
  \param[in] index -
 */
  void buildPartialInfluenceMatrix(
-    std::vector< std::vector<double> > &influenceMatrix,
+    //std::vector< std::vector<double> > &influenceMatrix,
     std::vector< std::vector<size_t> > &activeElements,
     std::vector<double> &opening,
     std::vector<double> &partialOpening,
-    std::vector< std::vector<double> > &partialInfluenceMatrix,
+    //std::vector< std::vector<double> > &partialInfluenceMatrix,
     std::vector< std::vector<size_t> > &index
 ){
     std::vector<double> zeroVector(activeElements.size(), 0);
 
     partialOpening = zeroVector;
 
-    //partialInfluenceMatrix.resize(activeElements.size());
+    // partialInfluenceMatrix.resize(activeElements.size());
     // std::fill(partialInfluenceMatrix.begin(), partialInfluenceMatrix.end(),
     //     zeroVector);
 
@@ -125,6 +125,4 @@ void buildInfluenceMatrix(
         //     partialInfluenceMatrix[i][j] = influenceMatrix[pc2][pc1];
         // }
     }
-    // ai::saveVector("parOpen", partialOpening);
-    // ai::saveVector("parOpening", opening);
 }

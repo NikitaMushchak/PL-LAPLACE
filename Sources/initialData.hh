@@ -2,6 +2,8 @@
 
 #include "planar3D.hh"
 
+#include "nlohmann/json.hpp"
+
 /*!
  \brief Нахождение начального раскрытия
 */
@@ -74,6 +76,15 @@ bool recalculateElasticModulusContrast(
 bool recalculateLeakOffContrast(
     const std::vector< std::vector<double> > &layers,
     std::vector<double> &leakOff,
+    const std::vector<double> &y
+);
+
+/*!
+ \brief Пересчет контраста трещиностойкости
+*/
+bool recalculateToughnessContrast(
+    const std::vector< std::vector<double> > &layers,
+    std::vector<double> &toughness,
     const std::vector<double> &y
 );
 
