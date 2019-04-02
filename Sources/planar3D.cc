@@ -1615,11 +1615,11 @@ int planar3D(
 
     std::vector< std::vector<std::size_t> > activeElements;
 
-    findActiveElements(activeElements, elementIsActive, x, y, initialRadius);
+    findActiveElements(activeElements, elementIsActive, x, y, initialRadius+1);//////////////////////
 
 
-    size_t Nx = std::ceil(initialRadius) + 4;
-    size_t Ny = std::ceil(2.*initialRadius) + 4;
+    size_t Nx = std::ceil(initialRadius) + 5;
+    size_t Ny = 2*Nx - 1;
     size_t Nz = Nx;
 
     size_t N_dof = Nx*Ny*Nz;
@@ -1639,6 +1639,8 @@ int planar3D(
                         Nx,
                         Ny,
                         Nz);
+
+    std::cout<<"Nx = "<<Nx<<" Ny = "<<Ny<<" Nz = "<<Nz<<std::endl;
 
     #if !defined(BUILD_DLL)
     std::cout << "Active elements: " << activeElements.size() << "."

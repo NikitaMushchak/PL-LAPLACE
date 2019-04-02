@@ -13,11 +13,13 @@
  \param[out] result - результирующий вектор (N)
 */
 void multiplyDiag(std::vector<double> &y,
+                        //std::vector<double>& A0,
                         std::vector<double>& A1,
                         std::vector<double>& A2,
                         std::vector<double>& A3,
                         std::vector<double>& A4,
                         std::vector<double>& A5,
+                        //std::vector<double>& A6,
                         std::vector<double >&x,
                         size_t Nx,
                         size_t NxNy,
@@ -97,9 +99,9 @@ for(size_t i = 0 ; i < N_dof ; ++i){
     double alpha;
     double beta;
 
-    while(0.0001 < eps){
+    // while(0.0001 < eps){
         multiplyDiag(A_p, A1, A2, A3, A4, A5, p, Nx , NxNy , N_dof);
-        //ai::printMarker();
+        // ai::printMarker();
 		// ai::saveVector("p",p);
 		// ai::saveVector("A_p", A_p);
         alpha = MultiplyVV(r1,r1)/MultiplyVV(A_p,p);
@@ -119,7 +121,7 @@ for(size_t i = 0 ; i < N_dof ; ++i){
         // r1 = r2;
         eps = NormV(r2)/NormV(x);
         // std::cout<<"eps = "<<eps<<std::endl;
-     }
+     // }
 }
 //
 
@@ -173,12 +175,12 @@ void calculatePressure(
         const size_t i = activeElements[k][0];
         const size_t j = activeElements[k][1];
 
-        b[i+Nx*j] = -0.5*opening[k];
+        b[i+(Nx)*j] = - opening[k]; ////0.5!!!!
     }
 
     // std::cout<<"N_dof = "<<N_dof<<" Nx = "<<Nx<<"  Ny = "<<Ny<<std::endl;
     // ai::saveMatrix("inf",influenceMatrix);
-    // ai::saveVector("b", b);
+    ai::saveVector("b", b);
 
 
     conjGrad(
@@ -197,7 +199,7 @@ void calculatePressure(
              Nx*Ny,
              N_dof
              );
-    // ai::saveVector("T", T);
+    ai::saveVector("T", T);
     //std::cout<<"act Elements size = "<<activeElements.size()<<std::endl;
     //ai::saveMatrix("actEl", activeElements);
     // std::vector<double> press(N_dof, 0.);
@@ -206,15 +208,20 @@ void calculatePressure(
     //         press[i+Nx*j] = (0.5*1./(1.- 0.25*0.25)) * (-b[i+Nx*j] - T[i + Nx*j] )/dx;
     //     }
     // }
-
+    std::vector<std::vector<double> > pre(Nx);
+    for(size_t i =0 ; i< Nx;++i){
+        pre[i].resize(Ny);
+    }
     // ai::saveVector("press", press);
     for(std::size_t k = 0; k < activeElements.size(); ++k){
         const size_t i = activeElements[k][0];
         const size_t j = activeElements[k][1];
                                     // E        nu * nu
         pressure[ index[i][j] ] = (0.5*1./(1.- 0.25*0.25)) * (- b[i+Nx*j] - T[i + Nx*j] )/dx + stress[j];
+        pre[i][j] = pressure[ index[i][j] ];
     }
     ai::saveVector("pr", pressure);
+    ai::saveMatrix("davl", pre);
 }
 
 /*!
