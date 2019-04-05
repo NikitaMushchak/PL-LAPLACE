@@ -68,7 +68,7 @@ int main(const int argc, const char *argv[]){
 
     double cellSize = -1.;
     double meshSize = 30.;
-    double time = 25.0;
+    double time = 100.0;
     double timeStep = -1.;
     double timeScale = 60.;
 

@@ -294,13 +294,17 @@ int calculateEverything(
 
 	bool pauseCallback = false;	//Флаг того, что на паузе мы послали кэлбак
     size_t iter = 0;
+    std::cout<<"meshflag = "<<meshIsNotExhausted<<std::endl;
 
+    std::cout<<"modeling time  = "<<modelingTime<<"  T = "<<T<<std::endl;
     while(modelingTime >= T && meshIsNotExhausted){
         iter ++;
 
-        if(1 == iter)
-            meshIsNotExhausted =0;
+        if(1 == iter){
+            meshIsNotExhausted = 0;
+        }
 
+std::cout<<"iter = "<<iter<<std::endl;
         #if defined(BUILD_DLL)
 		if (DLL_Parametrs.Dll_State == DLL_Parametrs.Running)
 		{
@@ -389,14 +393,7 @@ int calculateEverything(
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         time0 = ai::time();
         #endif
-        // calculatePressure(
-        //     pressure,
-        //     index,
-        //     activeElements,
-        //     partialInfluenceMatrix,
-        //     openingNew,
-        //     stress
-        // );
+
         calculatePressure(
             pressure,
             index,
@@ -1345,7 +1342,7 @@ int planar3D(
     T0 = ai::min(T0, timeToChangeInjection);
 
     double T = T0;
-
+std::cout<<"TT = "<<T<<std::endl;
     initialRadius *= std::pow(fluidInjection, 1. / 3.) * std::pow(T0, gammaR);
 
     // Пересчитываем автомодельное решение в соответсвии с параметрами закачки
@@ -1526,16 +1523,16 @@ int planar3D(
 
     std::vector<double> opening = zeroVectorXY;
     std::vector< std::vector<size_t> > index(xSize, zeroSizeTVectorY);
-    initialRadius = 10.;
-    double co;
+    // initialRadius = 10.;
+    // double co;
     for(size_t i = 0; i < xSize; ++i){
         for(size_t j = 0; j < ySize; ++j){
             index[i][j] = i * ySize + j;
 
-            co = 0.5*cos(0.5 *M_PI* std::sqrt(x[i]*x[i]+y[j]*y[j])/(
+            // co = 0.5*cos(0.5 *M_PI* std::sqrt(x[i]*x[i]+y[j]*y[j])/(
             // xSize*0.8/dx
-            initialRadius
-            ) );
+            // initialRadius
+            // ) );
             opening[ index[i][j] ] = getInitialOpening(
                 x[i],
                 y[j],
@@ -1543,11 +1540,11 @@ int planar3D(
                 initialRadius,
                 //10.,
                 zP,
-                openingAtTheStart//);
-            )>epsilon?co:0.;
+                openingAtTheStart);
+            // )>epsilon?co:0.;
 
 
-			opep[i][j] = abs(opening[index[i][j]])>epsilon?co:0.;
+			opep[i][j] = abs(opening[index[i][j]]);//>epsilon?co:0.;
         }
     }
     ai::saveVector("iniopen",opening);
@@ -1557,11 +1554,6 @@ int planar3D(
     std::cout << std::endl;
     // std::cout << "Building influence matrix... ";
     #endif
-
-    // std::vector< std::vector<double> > influenceMatrix(xSize * ySize,
-    //     zeroVectorXY);
-
-    // buildInfluenceMatrix(influenceMatrix, xSize, ySize);
 
     #if !defined(BUILD_DLL)
     // std::cout << "OK." << std::endl;
@@ -1615,12 +1607,14 @@ int planar3D(
 
     std::vector< std::vector<std::size_t> > activeElements;
 
-    findActiveElements(activeElements, elementIsActive, x, y, initialRadius+1);//////////////////////
+    findActiveElements(activeElements, elementIsActive, x, y, initialRadius);//////////////////////
 
 
-    size_t Nx = std::ceil(initialRadius) + 5;
-    size_t Ny = 2*Nx - 1;
+    size_t Nx = ((int)std::ceil(initialRadius)+5)%2==0?(std::ceil(initialRadius)+6):(std::ceil(initialRadius)+5);
+    size_t Ny = ((int)std::ceil(2*initialRadius)+12)%2==0?(std::ceil(2*initialRadius)+13):(std::ceil(2*initialRadius)+12);;
     size_t Nz = Nx;
+
+    std::cout<<"Nx  = "<<Nx<<"  Ny= "<<Ny<<"  Nz = "<<Nz<<std::endl;
 
     size_t N_dof = Nx*Ny*Nz;
 
@@ -1687,22 +1681,16 @@ int planar3D(
     std::cout << "Building partial influence matrix... ";
     #endif
 
-    // buildPartialInfluenceMatrix(
-    //     influenceMatrix,
-    //     activeElements,
-    //     opening,
-    //     openingNew,
-    //     partialInfluenceMatrix,
-    //     index
-    // );
+    buildPartialInfluenceMatrix(
 
-    for(size_t j = 0; j < activeElements.size(); ++j){
-        const size_t ai = activeElements[j][0];
-        const size_t aj = activeElements[j][1];
-        const size_t pc1 = index[ai][aj];
+        activeElements,
+        opening,
+        openingNew,
 
-        openingNew[j] = opening[pc1];
-    }
+        index
+    );
+
+
 
     #if !defined(BUILD_DLL)
     std::cout << "OK." << std::endl;

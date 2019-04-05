@@ -99,14 +99,14 @@ for(size_t i = 0 ; i < N_dof ; ++i){
     double alpha;
     double beta;
 
-    // while(0.0001 < eps){
+    while(0.0001 < eps){
         multiplyDiag(A_p, A1, A2, A3, A4, A5, p, Nx , NxNy , N_dof);
         // ai::printMarker();
 		// ai::saveVector("p",p);
 		// ai::saveVector("A_p", A_p);
-        alpha = MultiplyVV(r1,r1)/MultiplyVV(A_p,p);
+        alpha = MultiplyVV(r1,r1) / MultiplyVV(A_p,p);
         for(size_t i = 0 ; i < x.size() ;++i){
-            x[i]+= alpha*p[i];
+            x[i]+= alpha * p[i];
             r2[i] = r1[i] - alpha * A_p[i];
         }
         // ai::saveVector("x",x);
@@ -121,7 +121,7 @@ for(size_t i = 0 ; i < N_dof ; ++i){
         // r1 = r2;
         eps = NormV(r2)/NormV(x);
         // std::cout<<"eps = "<<eps<<std::endl;
-     // }
+     }
 }
 //
 
@@ -159,7 +159,7 @@ void calculatePressure(
 ){
 
     std::fill(pressure.begin(), pressure.end(), 0.);
-    //ai::printMarker();
+    // ai::printMarker();
     //std::vector<double> partialPressure(N_dof, 0.);;
     //std::vector<double> T(N_dof, 0.);  // unknowns in  finite difference discretization of Laplace equation (AT = b)
     //std::fill(T.begin(), T.end(), 0.);
@@ -175,13 +175,12 @@ void calculatePressure(
         const size_t i = activeElements[k][0];
         const size_t j = activeElements[k][1];
 
-        b[i+(Nx)*j] = - opening[k]; ////0.5!!!!
+        b[i+(Nx)*j] = - 0.5*opening[k]; ////0.5!!!!
     }
 
     // std::cout<<"N_dof = "<<N_dof<<" Nx = "<<Nx<<"  Ny = "<<Ny<<std::endl;
     // ai::saveMatrix("inf",influenceMatrix);
     ai::saveVector("b", b);
-
 
     conjGrad(
              T,
@@ -220,7 +219,7 @@ void calculatePressure(
         pressure[ index[i][j] ] = (0.5*1./(1.- 0.25*0.25)) * (- b[i+Nx*j] - T[i + Nx*j] )/dx + stress[j];
         pre[i][j] = pressure[ index[i][j] ];
     }
-    ai::saveVector("pr", pressure);
+    // ai::saveVector("pr", pressure);
     ai::saveMatrix("davl", pre);
 }
 
