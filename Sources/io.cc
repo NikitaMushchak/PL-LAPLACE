@@ -1,141 +1,38 @@
-/*!
- \file io.cc
- \brief
- \details
-*/
 #include <vector>
-#include <fstream>
+#include <iostream>
+#include <algorithm>
 
-#include "planar3D.hh"
-
-#include "ailibrary/ai.hh"
 #include "nlohmann/json.hpp"
+#include "ailibrary/ai.hh"
 
 
-void SaveEverything(
-	std::vector<double> &opening,
-	std::vector<double> &pressure,
-	std::vector<double> &concentration,
-	std::vector<double> &openingNew,
-	std::vector< std::vector<double> > &distances,
-	std::vector< std::vector<double> > &velocities,
-	std::vector< std::vector<double> > &influenceMatrix,
-	std::vector< std::vector<double> > &partialInfluenceMatrix,
-	std::vector<double> &zeroVectorXY,
-	std::vector< std::vector<double> > &zeroMatrixXY,
-	std::vector< std::vector<Cell> > &mesh,
-	std::vector<double> x,
-	std::vector<double> y,
-	std::vector<Ribbon> &ribbons,
-	std::vector< std::vector<std::size_t> > &index,
-	std::vector< std::vector<std::size_t> > &activeElements,
-	std::vector< std::vector<bool> > &elementIsActive,
-	std::vector<double> &activationTime,
-	std::vector< std::vector<double> > &injection,
-	std::vector< std::vector<double> > &layers,
-	std::vector<double> &stress,
-	std::vector<double> &leakOff,
-	std::vector<double> &flatYoungsModulus,
-	double &fluidDensity,
-	double &proppantDensity,
-	double &n,
-	double &mu,
-	double &wn,
-	const double timeScale,
-	const double timeStep,
-	std::vector< std::vector<double> > &fracture,
-	double &length,
-	double &height,
-	double &initialRadius,
-	double &axMax,
-	int &meshScalingCounter,
-	bool &meshIsNotExhausted,
-	double &T,
-	const double T0,
-	std::size_t &injectionIndex,
-	double &timeToChangeInjection,
-	std::size_t stepToCheck,
-	const double modelingTime,
-	const bool considerElasticModulusContrast,
-	const bool saveSteps,
-	const bool runningFromGUI,
-	const bool override
-)
-{
-	ai::saveVector("1/opening", opening);
-	ai::saveVector("1/pressure", pressure);
-	ai::saveVector("1/concentration", concentration);
-	ai::saveVector("1/openingNew", openingNew);
-	ai::saveVector("1/x", x);
-	ai::saveVector("1/y", y);
-	//ai::saveVector("ribbons",ribbons);
-	ai::saveVector("1/activationTime", activationTime);
-	ai::saveVector("1/stress", stress);
-	ai::saveVector("1/leakOff", leakOff);
-	ai::saveMatrix("1/distances", distances);
-	ai::saveMatrix("1/velocities", velocities);
-//	ai::saveVector("1/flatYoungsModulus", flatYoungsModulus);
-
-
-//	ai::saveMatrix("1/influenceMatrix", influenceMatrix);
-	ai::saveMatrix("1/partialInfluenceMatrix", partialInfluenceMatrix);
-	//ai::saveMatrix("mesh",mesh);
-	ai::saveMatrix("1/index", index);
-	ai::saveMatrix("1/activeElements", activeElements);
-	ai::saveMatrix("1/injection", injection);
-	ai::saveMatrix("1/layers", layers);
-	ai::saveMatrix("1/elementIsActive", elementIsActive);
-	ai::saveMatrix("1/fracture", fracture);
-
-
-	std::vector<double> save;
-
-	save.push_back(fluidDensity);
-	save.push_back(proppantDensity);
-	save.push_back(n);
-	save.push_back(mu);
-	save.push_back(wn);
-	save.push_back(timeScale);
-	save.push_back(timeStep);
-	save.push_back(length);
-	save.push_back(height);
-	save.push_back(initialRadius);
-	save.push_back(axMax);
-	save.push_back((double)meshScalingCounter);
-	save.push_back(T);
-	save.push_back(T0);
-	save.push_back((double)injectionIndex);
-	save.push_back(timeToChangeInjection);
-	save.push_back((double)stepToCheck);
-	ai::saveVector("1/Save", save);
-
-}
+#include "io.hh"
 
 /*!
-\brief  Экспорт выходных данных в симулятор из расчетного модуля
+\brief  ������� �������� ������ � ��������� �� ���������� ������
 
-\details Функция сохраняет выходные данные в строке  в формате json.
+\details ������� ��������� �������� ������ � ������  � ������� json.
 
-\param[in] Wk - вектор раскрытий
-\param[in] wn - массштабный коэффициент
-\param[in] pressure - матрица давлений
-\param[in] concentration - матрица концентраций проппанта
+\param[in] Wk - ������ ���������
+\param[in] wn - ����������� �����������
+\param[in] pressure - ������� ��������
+\param[in] concentration - ������� ������������ ���������
 \param[in] x
 \param[in] y
 \param[in] dx
 \param[in] dy
 \param[in] i00
 \param[in] j00
-\param[in] index - матрица активных элементов
-\param[in] Time - Текущее время (модельное)
+\param[in] index - ������� �������� ���������
+\param[in] Time - ������� ����� (���������)
 \param[in] timeScale -
-\param[in] fluidEfficiency - эффективность жидкости
-\param[in] fluidDensity - плотность жидкости
-\param[in] proppantEfficiency - эффективность проппанта
-\param[in] proppantDensity - плотность проппанта
+\param[in] fluidEfficiency - ������������� ��������
+\param[in] fluidDensity - ��������� ��������
+\param[in] proppantEfficiency - ������������� ���������
+\param[in] proppantDensity - ��������� ���������
 \param[in] fluidInjection
 \param[in] proppantInjection
-\param[in] nominalStress - минимальное значиние напряжений в интервале перфорации, [атм]
+\param[in] nominalStress - ����������� �������� ���������� � ��������� ����������, [���]
 \param[in] IdDesign
 \param[in] IdStage
 */
@@ -159,71 +56,73 @@ std::string ExportJson(
 	double fluidInjection,
 	double proppantInjection,
 	double nominalStress,
-	DLL_Param &DLL_Parametrs
+	double Z_coordinate,
+	std::string IdDesign,
+	std::string IdStage
 ) {
-	// Число атмосфер в 1 МПа
+	// ����� �������� � 1 ���
 	const double atmosphereCoefficient = 9.869;
-	//комментарий с лекции !!!!!!!!!!!!!!!
+
 	const double xSize = x.size();
 	const double ySize = y.size();
 
 	//////////////////////////////////////////////////////////////////////////////////////////
-	//Эти данные пока МФТИ просит заполнять нулями
+	//��� ������ ���� ���� ������ ��������� ������
 	//////////////////////////////////////////////////////////////////////////////////////////
-	double azimuth = 0;								//азимут расчетной ячейки в пространстве(задается 0)
-	int id = 0;										//(задается 0)
-	int stage_id = 0;								//(задается 0)
-	int num_fluids = 1;								//number of fluids - общее количество жидкостей
-	int num_proppants = 0;							//number of proppants - общее количество пропантов
+	double azimuth = 0;								//������ ��������� ������ � ������������(�������� 0)
+	int id = 0;										//(�������� 0)
+	int stage_id = 0;								//(�������� 0)
+	int num_fluids = 1;								//number of fluids - ����� ���������� ���������
+	int num_proppants = 0;							//number of proppants - ����� ���������� ���������
 
 
 	if (fluidEfficiency > 100)fluidEfficiency = 100.;
 
 
 	//////////////////////////////////////////////////////////////////////////////////////////
-	//Структура выходного файла json
+	//��������� ��������� ����� json
 	//////////////////////////////////////////////////////////////////////////////////////////
 	//Results
-	//	Smin - минимальное значиние напряжений в интервале перфорации, [атм]
+	//	Smin - ����������� �������� ���������� � ��������� ����������, [���]
 	//	accumulated data
-	//	fluid efficiency - эффективность жидкости в момент времени "time", [%]
-	//	net pressure - значение чистого давления на устье трещины в слое интеравала перфорации с напряжением "Smin", [атм]
-	//	proppant concentration - конентрация пропанта в момент времени "time" на входе в трещину, [кг / куб.м.]
-	//	rate - расход смеси в момент времени "time" на входе в трещину, [куб.м / мин]
-	//	time - момент времени на который записан результат расчета
+	//	fluid efficiency - ������������� �������� � ������ ������� "time", [%]
+	//	net pressure - �������� ������� �������� �� ����� ������� � ���� ���������� ���������� � ����������� "Smin", [���]
+	//	proppant concentration - ����������� �������� � ������ ������� "time" �� ����� � �������, [�� / ���.�.]
+	//	rate - ������ ����� � ������ ������� "time" �� ����� � �������, [���.� / ���]
+	//	time - ������ ������� �� ������� ������� ��������� �������
 	//	geometry
-	//	branches - обозначение полукрыла трещины(0)
-	//	cells - расчетные ячейки записанные в последовательности : сверху - вниз(j индексы), слева - направо(i индексы)
-	//	azimuth - азимут расчетной ячейки в пространстве(задается 0)
-	//	concentrations - объемная доля концентрации фаз, [д.ед.]
-	//	dx, dy, dz - размеры расчетной ячейки(dy - раскрытие), [м]
+	//	branches - ����������� ��������� �������(0)
+	//	cells - ��������� ������ ���������� � ������������������ : ������ - ����(j �������), ����� - �������(i �������)
+	//	azimuth - ������ ��������� ������ � ������������(�������� 0)
+	//	concentrations - �������� ���� ������������ ���, [�.��.]
+	//	dx, dy, dz - ������� ��������� ������(dy - ���������), [�]
 	//	id - 0; stage id - 0
-	//	x, y, z - координаты центра расчетной ячеки в пространстве, [м]
-	//	grid - параметры расчетной области
-	//	nx - общее количество расчетных ячеек по Х
-	//	nz - общее количество расчетных ячеек по Z
-	//	slurry - свойства смеси в закачке
-	//	mass density of components - плотность компонент(в той же последовательности, что и в "concentrations"), [кг / куб.м]
-	//	name of components - названия компонент(в той же последовательности, что и в "concentrations")
-	//	number of fluids - общее количество флюидов
-	//	number of proppants - общее количество пропантов
-	//	coordinates - координаты центра интервала перфорации, [м]
-	
-	
-	
-	
-	
+	//	x, y, z - ���������� ������ ��������� ����� � ������������, [�]
+	//	grid - ��������� ��������� �������
+	//	nx - ����� ���������� ��������� ����� �� �
+	//	nz - ����� ���������� ��������� ����� �� Z
+	//	slurry - �������� ����� � �������
+	//	mass density of components - ��������� ���������(� ��� �� ������������������, ��� � � "concentrations"), [�� / ���.�]
+	//	name of components - �������� ���������(� ��� �� ������������������, ��� � � "concentrations")
+	//	number of fluids - ����� ���������� �������
+	//	number of proppants - ����� ���������� ���������
+	//	coordinates - ���������� ������ ��������� ����������, [�]
+
+
+
+
+
 	std::ostringstream output;
 
 	output << "{\n";
 	//Report
 	output << "\"Report\":\n ";
 	output << "{\n";
-	output << "\t\"relativeMassBalanceError\": " << "0.0" << ",\n";	//нужно понять откуда эту цифру брать!!!
-	output << "\t\"stageId\": \"" << DLL_Parametrs.IdStage.c_str() << "\"\n";
+	output << "\t\"relativeMassBalanceError\": " << "0.0" << ",\n";	//����� ������ ������ ��� ����� �����!!!
+	output << "\t\"stageId\": \"" << IdStage.c_str() << "\"\n";
 	output << "},\n"; //close Report
 	//Ports
-	output << "\t\"" << DLL_Parametrs.IdStage.c_str() << "\" :\n";	output << "{\n";
+	output << "\t\"" << IdStage.c_str() << "\" :\n";	output << "{\n";
 	output << "\"Ports\":\n [ \n";
 	//////////////////////////////////////////////////////////////////////////////////////////
 	//Results
@@ -231,18 +130,18 @@ std::string ExportJson(
 	{
 	output << "{\n";
 	output << std::setprecision(14) << "\"Results\": {\n";
-	//Smin - минимальное значиние напряжений в интервале перфорации, [атм]
+	//Smin - ����������� �������� ���������� � ��������� ����������, [���]
 	output << "\t\"Smin\": " << nominalStress * atmosphereCoefficient << ",\n";
 	output << "\t\"accumulated data\": {\n";
-	//	fluid efficiency - эффективность жидкости в момент времени "time", [%]
+	//	fluid efficiency - ������������� �������� � ������ ������� "time", [%]
 	output << "\t  \"fluid efficiency\": " << fluidEfficiency << ",\n";
-	//	net pressure - значение чистого давления на устье трещины в слое интеравала перфорации с напряжением "Smin", [атм]
+	//	net pressure - �������� ������� �������� �� ����� ������� � ���� ���������� ���������� � ����������� "Smin", [���]
 	output << "\t  \"net pressure\": " << pressure[index[i00][j00]] * atmosphereCoefficient << ",\n";
-	//	proppant concentration - конентрация пропанта в момент времени "time" на входе в трещину, [кг / куб.м.]
+	//	proppant concentration - ����������� �������� � ������ ������� "time" �� ����� � �������, [�� / ���.�.]
 	output << "\t  \"proppant concentration\": " << proppantInjection << ",\n";
-	//	rate - расход смеси в момент времени "time" на входе в трещину, [куб.м / мин]
+	//	rate - ������ ����� � ������ ������� "time" �� ����� � �������, [���.� / ���]
 	output << "\t  \"rate\": " << fluidInjection / (timeScale / (wn * 60.)) << ",\n";
-	//	time - момент времени на который записан результат расчета
+	//	time - ������ ������� �� ������� ������� ��������� �������
 	output << "\t  \"time\": " << Time << "\n";
 	output << "\t},\n"; //close accumulated data
 
@@ -252,43 +151,43 @@ std::string ExportJson(
 	//////////////////////////////////////////////////////////////////////////////////////////
 	output << "\t\"geometry\": {\n";
 
-	//     branches - обозначение полукрыла трещины(0)
+	//     branches - ����������� ��������� �������(0)
 	output << "\t\t\"branches\": [\n\t\t {\n";
-	//     cells - расчетные ячейки записанные в последовательности : сверху - вниз(j индексы), слева - направо(i индексы)
+	//     cells - ��������� ������ ���������� � ������������������ : ������ - ����(j �������), ����� - �������(i �������)
 	output << "\t\t \"cells\": [\n";
-	int activeElements = 0;                 //Число активных элементов (те элементы, где вектор раскрытия не нулевой)
+	int activeElements = 0;                 //����� �������� ��������� (�� ��������, ��� ������ ��������� �� �������)
 
 											//////////////////////////////////////////////////////////////////////////////////////////
-											//     Расчет числа активных элементов
+											//     ������ ����� �������� ���������
 											//////////////////////////////////////////////////////////////////////////////////////////
 	for (int i = 0; i < xSize; i++)
 	{
 		for (int j = 0; j < ySize; j++)
 		{
-			//if (Wk[j*xSize + i] != 0) 
-				activeElements++; // если ячейка не раскрылась, то ее не выводим!!!
+			//if (Wk[j*xSize + i] != 0)
+				activeElements++; // ���� ������ �� ����������, �� �� �� �������!!!
 		}
 	}
 
-	int Index = 0;                                                 //Индексная перменная - номер выводимого массива данных
+	int Index = 0;                                                 //��������� ��������� - ����� ���������� ������� ������
 
 for (int i = 0; i < xSize; i++)
 	{
 	for (int j = 0; j < ySize; j++)
 		{
-			//*if (Wk[j*xSize + i] == 0) continue; // если ячейка не раскрылась, то ее не выводим!!!
+			//*if (Wk[j*xSize + i] == 0) continue; // ���� ������ �� ����������, �� �� �� �������!!!
 			Index++;
 			output << "\t\t{ \n";
-			//     azimuth - азимут расчетной ячейки в пространстве(задается 0)
+			//     azimuth - ������ ��������� ������ � ������������(�������� 0)
 			output << "\t\t  \"azimuth\": " << azimuth << ",\n";
-			//     concentrations - объемная доля концентрации фаз, [д.ед.]
+			//     concentrations - �������� ���� ������������ ���, [�.��.]
 			output << "\t\t  \"concentrations\": [\n ";
-			//for (int index=0; index< num_proppants; index++) // вывод нескольких проппантов (когда будет несколько проппантов)
-			output << "\t\t  " << concentration[index[i][j]] << ",\n";                //Вывод концентрации проппанта
-			output << "\t\t  " << 1 - concentration[index[i][j]] << "\n";             //Вывод концентрации жидкости
+			//for (int index=0; index< num_proppants; index++) // ����� ���������� ���������� (����� ����� ��������� ����������)
+			output << "\t\t  " << concentration[index[i][j]] << ",\n";                //����� ������������ ���������
+			output << "\t\t  " << 1 - concentration[index[i][j]] << "\n";             //����� ������������ ��������
 
 			output << "\t\t ],\n"; //close concentrations
-								   //  dx, dy, dz - размеры расчетной ячейки(dy - раскрытие), [м]
+								   //  dx, dy, dz - ������� ��������� ������(dy - ���������), [�]
 			output << "\t\t  \"dx\": " << dx << ",\n";
 			//if (std::isnan(Wk[j*xSize + i]))
 			//	Wk[j*xSize + i] = 100;
@@ -296,24 +195,24 @@ for (int i = 0; i < xSize; i++)
 			output << "\t\t  \"dz\": " << dy << ",\n";
 			//     id - 0; stage id - 0
 			output << "\t\t  \"i\": " << i << ",\n";
-			output << "\t\t  \"id\": \"" << DLL_Parametrs.IdStage.c_str() << "\",\n";
+			output << "\t\t  \"id\": \"" << IdStage.c_str() << "\",\n";
 			output << "\t\t  \"j\": " << j << ",\n";
 			output << "\t\t  \"stage id\": " << stage_id << ",\n";
-			//     x, y, z - координаты центра расчетной ячеки в пространстве, [м]
+			//     x, y, z - ���������� ������ ��������� ����� � ������������, [�]
 			output << "\t\t  \"x\": " << i * dx << ",\n";
-			output << "\t\t  \"y\": " << j * Wk[j*xSize + i] << ",\n";  //0
-			output << "\t\t  \"z\": " << DLL_Parametrs.Z_coordinate + j * dy << "\n";				// Z_coordinate + смещение
+			output << "\t\t  \"y\": " << j * Wk[j*xSize + i] << ",\n";
+			output << "\t\t  \"z\": " << j * dy << "\n";
 
 			if (activeElements != Index) //i != xSize - 1 && j != ySize - 1  &&
 				output << "\t\t },\n";
-			else {	//Если выводим последний элемент массива активных элементов - закрываем JSON массив
+			else {	//���� ������� ��������� ������� ������� �������� ��������� - ��������� JSON ������
 				output << "\t\t }\n";
 			}
 		}
 	}
 
 	output << "\n\t\t]\n"; //close cells
-	
+
 		//////////////////////////////////////////////////////////////////////////////////////////
 		//close branches
 		//close geometry
@@ -322,12 +221,12 @@ for (int i = 0; i < xSize; i++)
 	output << "\t},\n"; //close geometry
 
 		//////////////////////////////////////////////////////////////////////////////////////////
-		//     grid - параметры расчетной области
+		//     grid - ��������� ��������� �������
 		//////////////////////////////////////////////////////////////////////////////////////////
 		output << "\t\"grid\": {\n";
-		//     nx - общее количество расчетных ячеек по Х
+		//     nx - ����� ���������� ��������� ����� �� �
 		output << "\t\t  \"nx\": " << xSize << ",\n";
-		//     nz - общее количество расчетных ячеек по Z
+		//     nz - ����� ���������� ��������� ����� �� Z
 		output << "\t\t  \"nz\": " << ySize << "\n";
 		output << "\t},\n"; //close grid
 		//////////////////////////////////////////////////////////////////////////////////////////
@@ -335,33 +234,33 @@ for (int i = 0; i < xSize; i++)
 		//////////////////////////////////////////////////////////////////////////////////////////
 
 		//////////////////////////////////////////////////////////////////////////////////////////
-		//     slurry - свойства смеси в закачке
+		//     slurry - �������� ����� � �������
 		//////////////////////////////////////////////////////////////////////////////////////////
 		output << "\t\"slurry\": {\n";
 
 		output << "\t\t\"mass density of components\": [\n";
-		//     mass density of components - плотность компонент(в той же последовательности, что и в "concentrations"), [кг / куб.м]
+		//     mass density of components - ��������� ���������(� ��� �� ������������������, ��� � � "concentrations"), [�� / ���.�]
 		output << "\t\t " << proppantDensity << ",\n";
 		output << "\t\t " << fluidDensity << "\n";
 
 		output << "\t\t ],\n"; //close mass density of components
 
 		output << "\t\t\"name of components\": [\n";
-		//     name of components - названия компонент(в той же последовательности, что и в "concentrations")
+		//     name of components - �������� ���������(� ��� �� ������������������, ��� � � "concentrations")
 		output << "\t\t \"Propant 1\",\n";
 		output << "\t\t \"Fluid 1\"\n";
 		output << "\t\t ],\n"; //close name of componentss
 
-							   //     number of fluids - общее количество флюидов
+							   //     number of fluids - ����� ���������� �������
 		output << "\t\t  \"number of fluids\": " << num_fluids << ",\n";
-		//     number of proppants - общее количество пропантов
+		//     number of proppants - ����� ���������� ���������
 		output << "\t\t  \"number of proppants\": " << num_proppants << "\n";
-		output << "\t}\n"; 
+		output << "\t}\n";
 		//////////////////////////////////////////////////////////////////////////////////////////
 		//close slurry
 		//////////////////////////////////////////////////////////////////////////////////////////
 
-	output << "},\n"; 
+	output << "},\n";
 	}
 	//////////////////////////////////////////////////////////////////////////////////////////
 	//close Results
@@ -369,20 +268,20 @@ for (int i = 0; i < xSize; i++)
 
 
 	//////////////////////////////////////////////////////////////////////////////////////////
-	//coordinates - координаты центра интервала перфорации, [м]
+	//coordinates - ���������� ������ ��������� ����������, [�]
 	//////////////////////////////////////////////////////////////////////////////////////////
 	output << "\"coordinates\": {\n";
 	output << "\t\t  \"x\": " << 0 << ",\n";
 	output << "\t\t  \"y\": " << 0 << ",\n";
-	output << "\t\t  \"z\": " << DLL_Parametrs.Z_coordinate << "\n";	//Нужно передать сюда координату центра J_D_S_Ports[index]["md"].get<double>()
+	output << "\t\t  \"z\": " << Z_coordinate << "\n";	//����� �������� ���� ���������� ������ J_D_S_Ports[index]["md"].get<double>()
 	output << "},\n";
-	output << "\t\t\"id\": \"" << DLL_Parametrs.IdDesign << "\"\n";
+	output << "\t\t\"id\": \"" << IdDesign << "\"\n";
 
 	output << "}\n ";
 	output << "]\n ";
-	//Закрыли Ports
+	//������� Ports
 	output << "}\n }\n";
-	//Закрыли все
+	//������� ���
 
 	return	output.str();
 	//////////////////////////////////////////////////////////////////////////////////////////
@@ -390,16 +289,25 @@ for (int i = 0; i < xSize; i++)
 	//////////////////////////////////////////////////////////////////////////////////////////
 }
 
+
+
+
 void ImportJSON(
-	DLL_Param &DLL_Parametrs,
+	std::string J_String,
+	std::string &IdDesign,
+	std::string &IdStage,
 	std::vector< std::vector<double> > &layers_new,
-	std::vector< std::vector<double> > &injection
+	std::vector< std::vector<double> > &injection,
+	double &modelingTime,
+	double &Emit_time,
+	double &Z_coordinate
 )
 {
 	using json = nlohmann::json;
-	std::string J_String = DLL_Parametrs.J_String;
+
+	//std::string J_String;
 	//	ai::parseFileIntoString("../Planar Challenge - Test 12_init.json", J_String);
-	json J_IN_DATA = json::parse(J_String.c_str());
+	json J_IN_DATA = json::parse(J_String);
 
 	std::vector<double> Time;
 	std::vector<double> TimeStart;
@@ -407,14 +315,14 @@ void ImportJSON(
 
 
 	//	std::vector< std::vector <double> > layers;
-	//Вектор layers:
+	//������ layers:
 	//{L_start - middle, L_end - middle, stress, young, poisson, carter * 1000000.}
-	//[0] - начало слоя (смещение относительно центрального стоя)
-	//[1] - конец слоя (смещение относительно центрального стоя)
-	//[2] - горизонтальное напряжение в слое
-	//[3] - Модуль Юнга
-	//[4] - Коэффициент пуассона
-	//[5] - Коэффициент утечек по Картеру
+	//[0] - ������ ���� (�������� ������������ ������������ ����)
+	//[1] - ����� ���� (�������� ������������ ������������ ����)
+	//[2] - �������������� ���������� � ����
+	//[3] - ������ ����
+	//[4] - ����������� ��������
+	//[5] - ����������� ������ �� �������
 
 	//struct LAYER {
 	//	double	start,
@@ -426,7 +334,7 @@ void ImportJSON(
 	//};
 	//std::vector< LAYER > layers;
 	std::vector< std::vector<double>> layers;
-	//int index_middle;					//Индекс центрального слоя в векторе layers
+	//int index_middle;					//������ ������������ ���� � ������� layers
 	//LAYER layer;
 	//std::vector< std::vector<double> > injection;
 	std::vector<double> reologies;
@@ -442,28 +350,28 @@ void ImportJSON(
 	double maxstress = 0;
 	double minstress = 99999999;
 
-	DLL_Parametrs.Emit_time = J_IN_DATA["Design"]["Settings"]["emit"].get<double>();
-	DLL_Parametrs.IdDesign = J_IN_DATA["Design"]["id"].get<std::string>();
+	Emit_time = J_IN_DATA["Design"]["Settings"]["emit"].get<double>();
+	IdDesign = J_IN_DATA["Design"]["id"].get<std::string>();
 	json  J_D_Stages = J_IN_DATA["Design"]["Stages"];
 
 	for (int index = 0; index < J_D_Stages.size(); index++)
 	{
-		//информация о слоях ReservoirFormation - Таблица с планшетом литологии
+		//���������� � ����� ReservoirFormation - ������� � ��������� ���������
 		//"0": "ZONE_NAME",
 		//"1" : "SYMBOL",
-		//"2" : "TVD_TOP",				TVD_TOP - кровля слоя [м]
-		//"3" : "TVD_BOT",				TVD_BOT - подошва слоя [м]
+		//"2" : "TVD_TOP",				TVD_TOP - ������ ���� [�]
+		//"3" : "TVD_BOT",				TVD_BOT - ������� ���� [�]
 		//"4" : "MD_TOP",
 		//"5" : "MD_BOT",
-		//"6" : "H_LAYER",				H_LAYER - толщина слоя [м]
-		//"7" : "H_LOSS",				H_LOSS - проницаемая толщина слоя [м]
+		//"6" : "H_LAYER",				H_LAYER - ������� ���� [�]
+		//"7" : "H_LOSS",				H_LOSS - ����������� ������� ���� [�]
 		//"8" : "GRAD_STRESS_MIN",
-		//"9" : "STRESS_MIN"			STRESS_MIN - минимальное горизонтальное напряжение в слое [Па]
-		//"10" : "YOUNG_MODULUS",		YOUNG_MODULUS - Модуль Юнга [Па]
-		//"11" : "POISSON_RATIO",		POISSON_RATIO - Коэффициент Пуассона [д.ед.]
-		//"12" : "TOUGHNESS",			TOUGHNESS - Коэффициент трещиностойкости [атм * м^0.5]
-		//"13" : "FLUID_LOSS",			FLUID_LOSS - Коэффициент утечек по Картеру [м/сек^0.5]
-		//"14" : "SPURT_LOSS",			SPRUT_LOSS - Мгновенные утечки [м^3/м^2]
+		//"9" : "STRESS_MIN"			STRESS_MIN - ����������� �������������� ���������� � ���� [��]
+		//"10" : "YOUNG_MODULUS",		YOUNG_MODULUS - ������ ���� [��]
+		//"11" : "POISSON_RATIO",		POISSON_RATIO - ����������� �������� [�.��.]
+		//"12" : "TOUGHNESS",			TOUGHNESS - ����������� ���������������� [��� * �^0.5]
+		//"13" : "FLUID_LOSS",			FLUID_LOSS - ����������� ������ �� ������� [�/���^0.5]
+		//"14" : "SPURT_LOSS",			SPRUT_LOSS - ���������� ������ [�^3/�^2]
 		//"15" : "GRAD_PORE_PRESSURE",
 		//"16" : "PORE_PRESSURE",
 		//"17" : "POROSITY",
@@ -482,89 +390,84 @@ void ImportJSON(
 
 
 		//		std::cout << "Stage " << index << ":" << std::endl;
-		DLL_Parametrs.IdStage = J_D_Stages[index]["id"].get<std::string>();
+		IdStage = J_D_Stages[index]["id"].get<std::string>();
 		json  J_D_S_Ports = J_D_Stages[index]["Ports"];
-		std::vector<std::vector<json>> FracturePumpingSchedule_data = J_D_Stages[index]["FracturePumpingSchedule"]["data"];
-		std::string modelingTime_s = FracturePumpingSchedule_data[0][1];
-		//		sscanf_s(modelingTime_s.c_str(), "%lf", &DLL_Parametrs.modelingTime);
-		DLL_Parametrs.modelingTime = std::stof(modelingTime_s);		//Время окончания закачки из JSON
-
 		for (int index = 0; index < J_D_S_Ports.size(); index++)
 		{
 			//			std::cout << "Port " << index << ":" << std::endl;
 			std::vector<std::vector<json>> Ports_DATA = J_D_S_Ports[index]["ReservoirFormation"]["data"];
 
-			//Информация о послойной геологии модели.
-			double middle = J_D_S_Ports[index]["md"].get<double>();		//координата центра центррального слоя
-			DLL_Parametrs.Z_coordinate = middle;										//координата центра перфорации (для отправки в выходной json)
+			//���������� � ��������� �������� ������.
+			double middle = J_D_S_Ports[index]["md"].get<double>();		//���������� ������ ������������� ����
+			Z_coordinate = middle;										//���������� ������ ���������� (��� �������� � �������� json)
 
 			double L_start;
 			double L_end;
-			double stress;	//Горизонтальное напряжение в слое
-			double young;	//Модуль Юнга
-			double poisson;	//Коэффициент пуассона
-			double carter;	//Коэффициент утечек по Картеру
-							//Временные переменный для создания трехслойной схемы
+			double stress;	//�������������� ���������� � ����
+			double young;	//������ ����
+			double poisson;	//����������� ��������
+			double carter;	//����������� ������ �� �������
+							//��������� ���������� ��� �������� ����������� �����
 			double	L_first;
-			bool flag1 = false;	//Флаг исполнения одного действия
-			bool flag2 = false;	//Флаг исполнения одного действия
+			bool flag1 = false;	//���� ���������� ������ ��������
+			bool flag2 = false;	//���� ���������� ������ ��������
 
 			for (int index = 0; index < Ports_DATA.size(); index++)
 			{
-				//Глубины начала и окончания index слоя
+				//������� ������ � ��������� index ����
 				std::string L_start_s = Ports_DATA[index][2];
-				L_start = std::stof(L_start_s);
+				sscanf_s(L_start_s.c_str(), "%lf", &L_start);
 				if (index == 0)L_first = L_start;
 				std::string L_end_s = Ports_DATA[index][3];
-				L_end = std::stof(L_end_s);
+				sscanf_s(L_end_s.c_str(), "%lf", &L_end);
 
-				//Горизонтальное напряжение в слое
+				//�������������� ���������� � ����
 				std::string stress_s = Ports_DATA[index][9];
-				stress = std::stof(stress_s);
-				//Модуль Юнга
+				sscanf_s(stress_s.c_str(), "%lf", &stress);
+				//������ ����
 				std::string young_s = Ports_DATA[index][10];
-				young = std::stof(young_s);
-				//Коэффициент пуассона
+				sscanf_s(young_s.c_str(), "%lf", &young);
+				//����������� ��������
 				std::string poisson_s = Ports_DATA[index][11];
-				poisson = std::stof(poisson_s);
-				//Коэффициент утечек по Картеру
+				sscanf_s(poisson_s.c_str(), "%lf", &poisson);
+				//����������� ������ �� �������
 				std::string carter_s = Ports_DATA[index][13];
-				carter = std::stof(carter_s);
+				sscanf_s(carter_s.c_str(), "%lf", &carter);
 
-				if ((L_end - middle) == 0)	//Проверяем случай, когда центр перфорацмм попадает на границу между слоями
+				if ((L_end - middle) == 0)	//��������� ������, ����� ����� ���������� �������� �� ������� ����� ������
 				{
 					index++;
 
 					std::string L_end_s = Ports_DATA[index][3];
-					L_end = std::stof(L_end_s);
+					sscanf_s(L_end_s.c_str(), "%lf", &L_end);
 					double	stress_temp = 0.;
 					double	young_temp = 0.;
 					double	poisson_temp = 0.;
 					double	carter_temp = 0.;
-					//Горизонтальное напряжение в слое
+					//�������������� ���������� � ����
 					std::string stress_s = Ports_DATA[index][9];
-					stress_temp = std::stof(stress_s);
-					//Модуль Юнга
+					sscanf_s(stress_s.c_str(), "%lf", &stress_temp);
+					//������ ����
 					std::string young_s = Ports_DATA[index][10];
-					young_temp = std::stof(young_s);
-					//Коэффициент пуассона
+					sscanf_s(young_s.c_str(), "%lf", &young_temp);
+					//����������� ��������
 					std::string poisson_s = Ports_DATA[index][11];
-					poisson_temp = std::stof(poisson_s);
-					//Коэффициент утечек по Картеру
+					sscanf_s(poisson_s.c_str(), "%lf", &poisson_temp);
+					//����������� ������ �� �������
 					std::string carter_s = Ports_DATA[index][13];
-					carter_temp = std::stof(carter_s);
-					//Усредняем соседние слои в соответствии с значениями толщин слоев.
-					stress = (stress*fabs(middle - L_start) + stress_temp * fabs(middle - L_end)) / fabs(L_end - L_start);
-					young = (young*fabs(middle - L_start) + young_temp * fabs(middle - L_end)) / fabs(L_end - L_start);
+					sscanf_s(carter_s.c_str(), "%lf", &carter_temp);
+					//��������� �������� ���� � ������������ � ���������� ������ �����.
+					stress	= (stress*fabs(middle - L_start)+ stress_temp*fabs(middle - L_end)) / fabs(L_end - L_start);
+					young	= (young*fabs(middle - L_start) + young_temp * fabs(middle - L_end)) / fabs(L_end - L_start);
 					poisson = (poisson*fabs(middle - L_start) + poisson_temp * fabs(middle - L_end)) / fabs(L_end - L_start);
-					carter = (carter*fabs(middle - L_start) + carter_temp * fabs(middle - L_end)) / fabs(L_end - L_start);
+					carter	= (carter*fabs(middle - L_start) + carter_temp * fabs(middle - L_end)) / fabs(L_end - L_start);
 
 				}
 				layers.push_back(std::vector<double>{L_start - middle, L_end - middle, stress*std::pow(10, -6), young*std::pow(10, -9), poisson, carter * 1000000.});
 			}
 
 		}
-		//информация о режимах закачки
+		//���������� � ������� �������
 		//"0": "STAGE_TYPE",
 		//"1" : "TIME",
 		//"2" : "SLURRY_RATE",
@@ -591,501 +494,1083 @@ void ImportJSON(
 		std::vector<std::vector<json>> Pumping_DATA = J_D_Stages[index]["UserPumpingSchedule"]["data"];		//["UserPumpingSchedule"]["data"];
 
 		Time.push_back(0.);
-		//	TimeStart.push_back(0.);
-		int start_stage_time = 0;
-		for (size_t index_PD = 0; index_PD < Pumping_DATA.size(); index_PD++)
+		TimeStart.push_back(0.);
+
+		for (size_t y = 0; y < Pumping_DATA.size(); ++y)
 		{
-			//вычисление параметров стадий закачки
-			//Время стадии
-			std::string fluid_type = Pumping_DATA[index_PD][5];
-			//Тип жидкости. (дальше по этому типу жидкости мы будем добавлять временные промежутки для конкретной жидкости)
-			std::string end_time_s = Pumping_DATA[index_PD][1];
-			int end_stage_time = std::stoi(end_time_s);				//продолжительность текущей стадии
-																	//			std::cout << end_stage_time << "     ";
-																	//Расход жидкости за стадию, куб. М
-			std::string FluodVol_s = Pumping_DATA[index_PD][2];
-			double FluodVol = std::stof(FluodVol_s);
-			FluodVol = FluodVol * 60; //;/ end_time;					//перерасчет в м3/мин
-									  //Масса проппанта за стадию, кг
-			std::string PropMass_s = Pumping_DATA[index_PD][7]; ///Pumping_DATA[index][13];	//концентрация проппанта на старте промежутка стадии
-			double PropMass_start = std::stof(PropMass_s);
-			std::string PropMass_e = Pumping_DATA[index_PD][8]; ///Pumping_DATA[index][13]; //концентрация пропанта в конце промежутка стадии
-			double PropMass_end = std::stoi(PropMass_e);
+			flui.push_back(Pumping_DATA[y][5]);
+		}
+		// std::cout << "flui size = " << flui.size() << std::endl;
+		// ai::printVector(flui);
+		/*double tmp_T1;
+		for (int i = flui.size() - 1; i > 0; i--)
+		for (int j = 0; j<(i - 1); j++)
+		{
+
+		if (flui[j] == flui[j + 1])
+		flui.erase(flui.begin() + j + 1);
+		}*/
+		//� ������� ���������
+		/*unique(flui.begin(), flui.begin() + flui.size() - 1);
+		flui.resize(flui.begin() + flui.size() - 1 - flui.begin());*/
+
+		for (int i = 0; i < flui.size();) {
+			if (std::find(flui.begin(), flui.begin() + i, flui[i]) != flui.begin() + i)
+				flui.erase(flui.begin() + i);
+			else
+				i++;
+		}
+		// std::cout << "flui size = " << flui.size() << std::endl;
 
 
-			//Цикл поиска параметров жидкости в базе жидкостей
-			std::vector<std::vector<json>> F_Base = J_IN_DATA["FluidBase"]["data"];
-			// std::cout<<"F_Base.size() "<<F_Base.size()<<std::endl;
-			for (int index = 0; index < F_Base.size(); index++)	//Цикл перебора жидкостей
+
+		double start_time = 0;
+		//std::cout << "Pumping_DATA.size()"<<Pumping_DATA.size()<<std::endl;
+		for (int index = 0; index < Pumping_DATA.size(); index++)
+		{
+			///////////////////////////////////////////////////////////////////
+			//	��� ������� ���� �������� ���������� ��������� ������ ������ ��������� ����� ������� (["UserPumpingSchedule"]["data"])
+			//  ��� ������ ��� ����������� ��� ����, ����� ������� ������������ ���� ������� ��������� �������� ������� � �������� ��������� � ����������� �� �������.
+			///////////////////////////////////////////////////////////////////
+			TimeStart.clear();
+			TimeEnd.clear();
+			timefl.clear();
+			Time.clear();
+			viscosities.clear();
+			reologies.clear();
+			//flui.clear();
+			double steptime = 0.;
+			//������ �� ��������
+			for (int index = 0; index < Pumping_DATA.size(); index++)
 			{
-				//Модуль для нестационарной реалогии жидкости
-				std::string F_Type = F_Base[index][0];
-				if (fluid_type == F_Type)
-				{
-					//Для конкретной жидкости получили двумерный вектор ее параметров.
-					std::vector<std::vector<json>> F_Base_data = F_Base[index][6]["data"];
-					//std::cout<<"F_Base_data size = "<< F_Base_data.size()<<std::endl;
-					int start_time = 0;
-					for (int index1 = 0; index1 < F_Base_data.size(); index1++)
+
+				std::string end_time_s = Pumping_DATA[index][1];
+				double end_time;
+				sscanf_s(end_time_s.c_str(), "%lf", &end_time);
+				TimeStart.push_back(steptime);
+				steptime = (steptime + end_time);
+				Time.push_back(steptime);
+				TimeEnd.push_back(steptime);
+
+				//������ �������� ���-�� �������� � ��������
+				//for (size_t y = 0; y < Pumping_DATA.size(); ++y)
+				//{
+				//	 flui.push_back(Pumping_DATA[y][5]);
+				//}
+				//std::cout << "flui size = " << flui.size() << std::endl;
+				//ai::printVector(flui);
+				//double tmp_T1;
+				//for (int i = flui.size() - 1; i>0; i--)
+				//	for (int j = 0; j<(i - 1); j++)
+				//	{
+				//
+				//		if (flui[j] == flui[j + 1])
+				//			flui.erase(flui.begin() + j + 1);
+				//	}
+				////� ������� ���������
+				////unique(flui.begin(), flui.begin() + flui.size() - 1);
+				////flui.resize(flui.begin() + flui.size() - 1 - flui.begin());
+
+				//std::cout << "flui size = " << flui.size()<< std::endl;
+
+
+				//��������� ����. ��������
+				std::string fl = Pumping_DATA[index][5];
+				//std::cout << "fl = " << fl << std::endl;
+				std::vector<std::vector<json>> F_Base1 = J_IN_DATA["FluidBase"]["data"];
+				//std::cout << "F_Base1.data() = " << F_Base1.size() << std::endl;
+				//int stages1 = F_Base_data1[0][0]["rowCount"].get<int>();
+				//��������� ��������
+				if (flui.size() > 1) {
+					for (size_t j = 0; j < F_Base1.size(); ++j)
 					{
-						//double steptime;// = 0.;
-
-						std::vector<std::vector<json> > F_operator_time = F_Base_data[0][0]["data"];
-						int stages = F_Base_data[0][0]["rowCount"].get<int>();
-						size_t j = 0;
-						size_t k = 0;
-						for (int index2 = 0; index2 < stages; index2++)
+						std::string fbt = F_Base1[j][0];
+						// std::cout << "fbt = " << fbt << std::endl;
+						if (fl == fbt)
 						{
-							///////////////////////////////////////////////////////////////////////////
-							//Времена изменения характеристик для конкретной жидкости
-							//Добавляем в вектор общих времен, который потом будем сортировать
-							std::string end_time_s = F_operator_time[index2][0];
-							int end_time = std::stoi(end_time_s);
-							//Зависимость вязкости от времени для конкретной жидкости
-							std::string viscosity_s = F_operator_time[index2][1];
-							double viscosity = std::stof(viscosity_s);
-							//Зависимость реологии от времени для конкретной жидкости
-							std::string reology_s = F_operator_time[index2][2];
-							double reology = std::stof(reology_s);
-							//Заполнение вектора закачек.
-							//start_stage_time						
-							//Это интересующий нас промежуток
-							//start_stage_time+ end_stage_time
-							////////////////////////////////////////////////////////////////////////////////////////////////////////////////////						
-							//							|																		|
-							//					start_stage_time												start_stage_time + end_stage_time													
-							//							|																		|
-							//							|																		|
-							//			1				|								2										|				3
-							//							|																		|
-							//							|																		|
-							////////////////////////////////////////////////////////////////////////////////////////////////////////////////////						
+							//std::cout << "IN" << std::endl;;
+							std::vector<std::vector<json>> F_Base_data1 = F_Base1[j][6]["data"];
 
-							if (start_time <= start_stage_time + end_stage_time && start_time + end_time >= start_stage_time && start_time != end_time)
-								if (start_time < start_stage_time && start_time + end_time > start_stage_time && start_time + end_time < start_stage_time + end_stage_time) // мы находимся началом в 1 интервале, концом во 2 интервале
-								{
-									injection.push_back(std::vector<double> {start_stage_time / 60., (start_time + end_time) / 60.,
-										FluodVol,
-										PropMass_end,			//нужно уточнить что сюда класть
-										reology,
-										viscosity});
-								}
-								else if (start_time >= start_stage_time && start_time + end_time <= start_stage_time + end_stage_time)// мы находимся в 2 интервале и начало и конец
-								{
-									injection.push_back(std::vector<double> {start_time / 60., (start_time + end_time) / 60.,
-										FluodVol,
-										PropMass_end,			//нужно уточнить что сюда класть
-										reology,
-										viscosity});
-								}
-								else if (start_time >= start_stage_time && end_time > start_stage_time + end_stage_time) // мы находимся началом в 2 интервале, концом во 3 интервале
-								{
-									injection.push_back(std::vector<double> {start_time / 60., (start_stage_time + end_stage_time) / 60.,
-										FluodVol,
-										PropMass_end,			//нужно уточнить что сюда класть
-										reology,
-										viscosity});
-								}
-								else // мы находимся началом в 1 интервале, концом во 3 интервале
-								{
-									injection.push_back(std::vector<double> {start_stage_time / 60., (start_stage_time + end_stage_time) / 60.,
-										FluodVol,
-										PropMass_end,			//нужно уточнить что сюда класть
-										reology,
-										viscosity});
-								}
-							//перемещаемся на следующую стадию реологии жидкости
-							start_time = start_time + end_time;
+							std::vector<std::vector<json> > F_operator_time1 = F_Base_data1[0][0]["data"];
+							std::string viscosity_s = F_operator_time1[0][1];
+
+							//std::cout << "viscosity_s = " << viscosity_s << std::endl;
+							double viscosity;
+							sscanf_s(viscosity_s.c_str(), "%lf", &viscosity);
+
+							viscosities.push_back(viscosity);
+
+							std::string reology_s = F_operator_time1[0][2];
+							double reology;
+							sscanf_s(reology_s.c_str(), "%lf", &reology);
+							reologies.push_back(reology);
+
 						}
 					}
-					break; //выходим из цикла перебора жидкостей так как мы уже нужную жидкость нашли
 				}
 			}
+			///////////////////////////////////////////////////////////////////
 
+			// std::cout << " pre viscosities" << std::endl;
+			// if (viscosities.size()>0)
+			// ai::printVector(viscosities);
 
-			start_stage_time = start_stage_time + end_stage_time;		//перемещаемся на следующую стадию
+			//���������� ���������� ������ �������
+			std::string end_time_s = Pumping_DATA[index][1];
+			double end_time;
+			sscanf_s(end_time_s.c_str(), "%lf", &end_time);
+			//������ �������� �� ������, ���. �
+			std::string FluodVol_s = Pumping_DATA[index][2];
+			double FluodVol;
+			sscanf_s(FluodVol_s.c_str(), "%lf", &FluodVol);
+			FluodVol = FluodVol * 60; //;/ end_time;					//���������� � �3/���
+			fluid.push_back(FluodVol);
+			//����� ��������� �� ������, �� ����!!!!!!!!!!!!
+			std::string PropMass_s = Pumping_DATA[index][7]; ///Pumping_DATA[index][13];
+			double PropMass;
+			sscanf_s(PropMass_s.c_str(), "%lf", &PropMass);
+
+			std::string PropMass_s1 = Pumping_DATA[index][8]; ///Pumping_DATA[index][13];
+			double PropMass1;
+			sscanf_s(PropMass_s1.c_str(), "%lf", &PropMass1);
+
+			prop.push_back((PropMass + PropMass1) / 2.);
 		}
 
-	}
+		//���� ������ ���������� ��������� � ���� ����������
+		std::string proppant_type = Pumping_DATA[index][6];
+		std::vector<std::vector<json>> P_Base = J_IN_DATA["ProppantBase"]["data"];
+		//for (int index = 0; index < P_Base.size(); index++)
+		//{
+		//	if (proppant_type == P_Base[index][0])
+		//		// std::cout << "P_type: " << P_Base[index][1] << " ";
+		//}
 
-	//Цикл заполнения структуры параметров еврейкости в базе еврейкостей
-	std::vector<std::vector<json>> F_Base = J_IN_DATA["FluidBase"]["data"];
-
-	Fluid_Param fluidparam;
-
-	//Считываем параментры всех еврейкостей и заполняем вектор класса для хранения данных
-	for (int index = 0; index < F_Base.size(); index++)	//Цикл перебора еврейкостей
-	{
-		std::string KEY = F_Base[index][0];
-		std::string CODE = F_Base[index][1];
-		std::string SPECIFIC_GRAVITY_s = F_Base[index][3];
-		double SPECIFIC_GRAVITY = std::stof(SPECIFIC_GRAVITY_s);
-		std::string SHARE_RATE_s = F_Base[index][4];
-		double SHARE_RATE = std::stof(SHARE_RATE_s);
-		std::string SPECIFIC_HEAT_s = F_Base[index][5];
-		double SPECIFIC_HEAT = std::stof(SPECIFIC_HEAT_s);
-		//Получаем значение температуры для каждого слоя
-		std::vector<std::vector<json>> F_Operator = F_Base[index][6]["data"];
-
-		std::vector <std::vector<double>> rheology_temp; //Вектор хранения реологии одной еврейкости
-
-		for (int index1 = 0; index1 < F_Operator.size(); index1++)	//Цикл перебора температурных параметров еврейкостей
+		//���� ������ ���������� �������� � ���� ���������
+		std::string fluid_type = Pumping_DATA[index][5];
+		std::vector<std::vector<json>> F_Base = J_IN_DATA["FluidBase"]["data"];
+		// std::cout<<"F_Base.size() "<<F_Base.size()<<std::endl;
+		for (int index = 0; index < F_Base.size(); index++)
 		{
-			std::string  temperature_s = F_Operator[index1][0]["value"];
-			double temperature = std::stof(temperature_s);
-			std::vector<std::vector<json>> T_operator = F_Operator[index1][0]["data"];
-			std::string D_Viscosity_s = T_operator[0][1];
-			std::string Rheology_s = T_operator[0][2];
-			std::string Eff_Viscosit_s = T_operator[0][3];
-			double D_Viscosity = std::stof(D_Viscosity_s);
-			double Rheology = std::stof(Rheology_s);
-			double Eff_Viscosit = std::stof(Eff_Viscosit_s);
-			rheology_temp.push_back({ temperature, D_Viscosity, Rheology, Eff_Viscosit });
+
+
+
+			//������ ��� �������������� �������� ��������
+			if (fluid_type == F_Base[index][0])
+			{
+				//std::cout << "F_type: " << F_Base[index][1] << " \n";
+				//��� ���������� �������� �������� ��������� ������ �� ����������.
+				std::vector<std::vector<json>> F_Base_data = F_Base[index][6]["data"];
+				//std::cout<<"F_Base_data size = "<< F_Base_data.size()<<std::endl;
+				for (int index1 = 0; index1 < F_Base_data.size(); index1++)
+				{
+					double steptime;// = 0.;
+
+					std::vector<std::vector<json> > F_operator_time = F_Base_data[0][0]["data"];
+					int stages = F_Base_data[0][0]["rowCount"].get<int>();
+					size_t j = 0;
+					size_t k = 0;
+					for (int index2 = 0; index2 < stages; index2++)
+					{
+						///////////////////////////////////////////////////////////////////////////
+						//������� ��������� ������������� ��� ���������� ��������
+						//��������� � ������ ����� ������, ������� ����� ����� �����������
+						std::string end_time_s = F_operator_time[index2][0];
+						double end_time;
+						sscanf_s(end_time_s.c_str(), "%lf", &end_time);
+						steptime = end_time * 60.;
+						//std::cout << "Time: " << end_time << " \n";
+						Time.push_back(steptime);
+
+						//std::cout << " cicle flui size()" << flui.size() << std::endl;
+
+						if (flui.size() == 1) {
+							//����������� �������� �� ������� ��� ���������� ��������
+							std::string viscosity_s = F_operator_time[index2][1];
+							double viscosity;
+							sscanf_s(viscosity_s.c_str(), "%lf", &viscosity);
+
+							viscosities.push_back(viscosity);
+							//����������� �������� �� ������� ��� ���������� ��������
+							std::string reology_s = F_operator_time[index2][2];
+							double reology;
+							sscanf_s(reology_s.c_str(), "%lf", &reology);
+
+							reologies.push_back(reology);
+							if (steptime > 0.)
+								for (size_t i = index2 - 1 + j; i < Pumping_DATA.size(); ++i)
+								{
+									// std::cout << "steptime = " << steptime << std::endl;
+									// std::cout << "TimeEnd" << i << " = " << TimeEnd[i] << std::endl;
+									if (steptime > TimeEnd[i])
+									{
+										j++;
+										/*viscosities.push_back(viscosity);
+										reologies.push_back(reology);*/
+										viscosities.insert(viscosities.begin() + i, viscosities[i]);
+										reologies.insert(reologies.begin() + i, reologies[i]);
+
+										//std::cout << "I = " << i << std::endl;
+									}
+
+								}
+							if (steptime > 0.)
+								for (size_t i = index2; i < Pumping_DATA.size(); i++)
+								{
+									if (steptime < TimeEnd[i] && steptime > TimeStart[i])
+									{
+										fluid.insert(fluid.begin() + i + k, fluid[i + k]);
+										k++;
+									}
+								}
+						}
+					}
+				}
+			}
 		}
-		fluidparam.setReology(KEY, CODE, SPECIFIC_GRAVITY, SHARE_RATE, SPECIFIC_HEAT, rheology_temp);
-		DLL_Parametrs.FluidParam.push_back(fluidparam);
+
+		// std::cout<<"All times"<<std::endl;
+		// ai::printVector(Time);
+		double tmp_T;
+		for (int index_1 = Time.size() - 1; index_1>0; index_1--)
+			for (int index = 0; index<(index_1 - 1); index++)
+			{
+				if (Time[index] > Time[index + 1])
+				{
+					tmp_T = Time[index + 1];
+					Time[index + 1] = Time[index];
+					Time[index] = tmp_T;
+				}
+				if (Time[index] == Time[index + 1])
+					Time.erase(Time.begin() + index + 1);
+			}
+		//� ������� ���������
+		unique(Time.begin(), Time.begin() + Time.size() - 1);
+		Time.resize(Time.begin() + Time.size() - 1 - Time.begin());
+		//���, ������ Time �������� ������ ���������� �����
 	}
+	// std::cout << "time size " << Time.size() << std::endl;
+	//ai::printVector(Time);
+
+	//start_time = start_time+end_time;
 
 
-	//Цикл заполнения структуры параметров проппанта в базе проппантов
-	std::vector<std::vector<json>> P_Base = J_IN_DATA["ProppantBase"]["data"];
-	Proppant_Param proppantparam;
+	// std::cout << "Startime" << std::endl;
+	// ai::printVector(TimeStart);
 
-	//Считываем параментры всех проппантов и заполняем вектор класса для хранения данных
-	for (int index = 0; index < P_Base.size(); index++)	//Цикл перебора проппантов
-	{
-		std::string KEY = P_Base[index][0];
-		std::string CODE = P_Base[index][1];
-		std::string  DIAMETER_s = P_Base[index][4];
-		double DIAMETER = std::stof(DIAMETER_s);
-		std::string SPECIFIC_GRAVITY_s = P_Base[index][5];
-		double SPECIFIC_GRAVITY = std::stof(SPECIFIC_GRAVITY_s);
-		std::string BULK_GRAVITY_s = P_Base[index][6];
-		double BULK_GRAVITY = std::stof(BULK_GRAVITY_s);
-		std::string CRITICAL_DENSITY_s = P_Base[index][7];
-		double CRITICAL_DENSITY = std::stof(CRITICAL_DENSITY_s);
-		std::string SPECIFIC_HEAT_s = P_Base[index][8];
-		double SPECIFIC_HEAT = std::stof(SPECIFIC_HEAT_s);
-		std::string EMBEDMENT_RATIO_s = P_Base[index][9];
-		double EMBEDMENT_RATIO = std::stof(EMBEDMENT_RATIO_s);
-		std::string SETTLING_VELOSITY_FACTOR_s = P_Base[index][10];
-		double SETTLING_VELOSITY_FACTOR = std::stof(SETTLING_VELOSITY_FACTOR_s);
-		std::string DRIFT_VELOSITY_FACTOR_s = P_Base[index][11];
-		double DRIFT_VELOSITY_FACTOR = std::stof(DRIFT_VELOSITY_FACTOR_s);
+	// std::cout << "Time End" << std::endl;
+	// ai::printVector(TimeEnd);
 
-		//Создаем экземпляр класса для хранения параметров проппанта и пеердачи их в вектор
-		proppantparam.setCoordinates(KEY, CODE, DIAMETER, SPECIFIC_GRAVITY, BULK_GRAVITY, CRITICAL_DENSITY, SPECIFIC_HEAT, EMBEDMENT_RATIO, SETTLING_VELOSITY_FACTOR, DRIFT_VELOSITY_FACTOR);
-		DLL_Parametrs.ProppantParam.push_back(proppantparam);
-	}
+	std::vector<double > ti;
+	//ti.push_back(0.);
+
+	for (size_t i = 0; i < Time.size(); i++) ti.push_back(Time[i] / 60.);
+
+	// std::cout << "inj" << std::endl;
+
+	// ai::printVector(fluid);
 
 
+	// std::cout << "ti" << std::endl;
 
+	// ai::printVector(ti);
+
+
+	// std::cout << " new ti" << std::endl;
+
+	// ai::printVector(ti);
+
+
+	// std::cout << "viscosities" << std::endl;
+	// if (viscosities.size()>0)
+	// ai::printVector(viscosities);
+
+	//	std::cout << "time fluid" << std::endl;
+	//	ai::printVector(timefl);
+
+
+	// std::cout << "realogies" << std::endl;
+	// if (reologies.size()>0)
+	// ai::printVector(reologies);
+
+
+	for (int index = 0; index < Time.size() - 1; index++)
+		injection.push_back(std::vector<double> {ti[index], ti[index + 1],
+			fluid[index]<0.00001 ? 0. : fluid[index], prop[index]<0.00001 ? 0. : prop[index],
+			reologies[index]<0.000001 ? reologies[index - 1] : reologies[index],
+			viscosities[index]<0.00001 ? viscosities[index - 1] : viscosities[index] });
+
+
+	modelingTime = injection[injection.size() - 1][1];
+	//	std::cout << "injection" << std::endl;
+	//	ai::printMatrix(injection);
+
+	//std::cout << "layers" << std::endl;
+	//ai::printMatrix(layers_new);
+
+
+	//for (int index = layers.size() - 1; index > 0; index--)
+	//{
+	//	maxstress = ai::max(maxstress, layers[index].stress);
+	//	minstress = ai::min(minstress, layers[index].stress);
+	//	std::cout << layers[index].start << "  " << layers[index].end << "  " << layers[index].stress << "  " << layers[index].poisson << "  " << layers[index].young << "  " << layers[index].carter << std::endl;
+	//}
+	//	std::vector<std::vector<double >> layers_new;
 	for (int index = layers.size() - 1; index >= 0; index--)
 		layers_new.push_back(layers[index]);
+	//layers = layers_new;
+
 	//////////////////////////////////////////////////////////////////////////////////////////
 	//End function ImportJSON
 	//////////////////////////////////////////////////////////////////////////////////////////
 	return;
 }
 
+void ApproximateLayers(std::vector< std::vector<double> >& layers, double& cellSize){
+    const double epsilon = pow(10., -8);
 
+    std::size_t centralIndex;
 
+    double H;
+    double dx;
 
+    /// Меняем последовательность записи слоев (сортировка от большего к меньшему)
+    std::vector< std::vector<double> > la;
+    for(int i = layers.size() - 1; i >= 0; --i){
+        la.push_back(layers[i]);
+    }
+    layers = la;
+    la.clear();
 
+    /// Определяем центральный слой
+    for(std::size_t i = 0; i < layers.size(); ++i){
+        if(layers[i][0] * layers[i][1] <= epsilon){
+            H = layers[i][1] - layers[i][0];
+            centralIndex = i;
 
-//////////////////////////////////////////////////////////////////////////////////////////
-//Function ApproximateLayers
-//////////////////////////////////////////////////////////////////////////////////////////
-/*!
-\brief  Преобразование выходных данных о реологии
+            break;
+        }
+    }
 
-\details Функция производит усреднение и размытие слоев.
+    double sigma = layers[centralIndex][2];
 
-\param[in,out] layers - матрица послойной реологий
-*/
-void ApproximateLayers(std::vector< std::vector<double> > &layers) {
-	const double epsilon = pow(10., -8);
+    std::vector<std::size_t> sloi;
 
-	std::size_t centralIndex;
+    double h;
+    double hnew;
 
-	double H;
-	double dx;
+    std::size_t it = centralIndex;
 
-	/// Меняем последовательность записи слоев (сортировка от большего к меньшему)
-	std::vector< std::vector<double> > la;
-	for (int i = layers.size() - 1; i >= 0; --i) {
-		la.push_back(layers[i]);
-	}
-	layers = la;
-	la.clear();
+    sloi.push_back(it);
 
-	/// Определяем центральный слой
-	for (std::size_t i = 0; i < layers.size(); ++i) {
-		if (layers[i][0] * layers[i][1] <= epsilon) {
-			H = layers[i][1] - layers[i][0];
-			centralIndex = i;
+    h = H;
+    sigma *= H;
 
-			break;
-		}
-	}
+    /// Убеждаемся, что центральный слой будет хотя бы 11.2 метра
+    if(11.2 >= H){
+        --it;
 
-	double sigma = layers[centralIndex][2];
+        while(5.6 > std::abs(layers[it][1])){
+            hnew = layers[it][1] - layers[it][0];
 
-	std::vector<std::size_t> sloi;
+            sigma += hnew * layers[it][2];
+            h += hnew;
 
-	double h;
-	double hnew;
+            sloi.push_back(it);
 
-	std::size_t it = centralIndex;
+            --it;
+        }
 
-	sloi.push_back(it);
+        it = centralIndex + 1;
 
-	h = H;
-	sigma *= H;
+        while(5.6 > layers[it][0]){
+            hnew = layers[it][1] - layers[it][0];
 
-	/// Убеждаемся, что центральный слой будет хотя бы 11.2 метра
-	if (11.2 >= H) {
-		--it;
+            sigma += hnew * layers[it][2];
+            h += hnew;
 
-		while (5.6 > std::abs(layers[it][1])) {
-			hnew = layers[it][1] - layers[it][0];
+            sloi.push_back(it);
 
-			sigma += hnew * layers[it][2];
-			h += hnew;
+            ++it;
+        }
 
-			sloi.push_back(it);
+        H = h;
+    }
 
-			--it;
-		}
+    sigma /= H;
 
-		it = centralIndex + 1;
+    dx = 0.09 * (H - epsilon);
 
-		while (5.6 > layers[it][0]) {
-			hnew = layers[it][1] - layers[it][0];
+    /// Переписываем слои в новую матрицу
+    std::size_t min = ai::min(sloi);
+    std::size_t max = ai::max(sloi);
 
-			sigma += hnew * layers[it][2];
-			h += hnew;
+    centralIndex = min;
 
-			sloi.push_back(it);
+    std::vector<std::vector<double> > layers1;
 
-			++it;
-		}
+    for(std::size_t i = 0; i < layers.size(); ++i){
+        if(i == min){
+            layers1.push_back(
+                std::vector<double>{
+                    layers[min][0],
+                    layers[max][1],
+                    sigma,
+                    layers[i][3],
+                    layers[i][4],
+                    layers[i][5],
+                    layers[i][6]
+                }
+            );
 
-		H = h;
-	}
+            i = max;
+        }else{
+            layers1.push_back(layers[i]);
+        }
+    }
 
-	sigma /= H;
+    /// Симметризуем центральный слой
+    const double deltaH = layers[max][1] - 0.5 * H;
 
-	dx = 0.09 * (H - epsilon);
+    for(std::size_t i = 0; i < layers1.size(); ++i){
+        layers1[i][0] -= deltaH;
+        layers1[i][1] -= deltaH;
+    }
 
-	/// Переписываем слои в новую матрицу    
-	std::size_t min = ai::min(sloi);
-	std::size_t max = ai::max(sloi);
+    std::vector< std::vector<double> > mesh;
 
-	centralIndex = min;
+    mesh.push_back(layers1[centralIndex]);
 
-	std::vector<std::vector<double> > layers1;
+	std::cout<<"cellSize = "<<cellSize<<std::endl;
 
-	for (std::size_t i = 0; i < layers.size(); ++i) {
-		if (i == min) {
-			layers1.push_back(
-				std::vector<double>{
-				layers[min][0],
-					layers[max][1],
-					sigma,
-					layers[i][3],
-					layers[i][4],
-					layers[i][5],
-					layers[i][6]
-			}
-			);
+	if(cellSize != -1 && cellSize >= dx)
+		dx = cellSize;
 
-			i = max;
-		}
-		else {
-			layers1.push_back(layers[i]);
-		}
-	}
+    double heightStep = dx;
+	std::cout<<"heigth step = "<<heightStep<<std::endl;
+    double currentHeight = layers1[centralIndex][0];
+	// int i = std::floor(layers1[0][0]/heightStep);
+    // for(int i = std::floor(layers1[0][0]/heightStep); i >= 0; --i){
+    //     mesh.push_back(std::vector<double>{
+    //         currentHeight - heightStep, currentHeight, 0., 0., 0., 0., 0.
+    //     });
+    //     currentHeight -= heightStep;
+    // }
+	 while(currentHeight  >= layers1[0][1]){
+		 mesh.push_back(std::vector<double>{
+             currentHeight - heightStep, currentHeight, 0., 0., 0., 0., 0.
+         });
+         currentHeight -= heightStep;
+	 }
+    currentHeight = layers1[centralIndex][1];
 
-	/// Симметризуем центральный слой
-	const double deltaH = layers[max][1] - 0.5 * H;
+    // for(std::size_t i = std::floor(layers1[layers1.size()-1][0]/heightStep); i < layers1.size(); ++i){
+    //     mesh.push_back(std::vector<double>{
+    //         currentHeight, currentHeight + heightStep, 0., 0., 0., 0., 0.
+    //     });
+    //     currentHeight += heightStep;
+    // }
 
-	for (std::size_t i = 0; i < layers1.size(); ++i) {
-		layers1[i][0] -= deltaH;
-		layers1[i][1] -= deltaH;
-	}
-
-	std::vector< std::vector<double> > mesh;
-
-	mesh.push_back(layers1[centralIndex]);
-
-	double heightStep = dx;
-	double currentHeight = layers1[centralIndex][0];
-
-	for (int i = (int)centralIndex - 1; i >= 0; --i) {
+	while(currentHeight  <= layers1[layers1.size()-1][0]){
 		mesh.push_back(std::vector<double>{
-			currentHeight - heightStep, currentHeight, 0., 0., 0., 0., 0.
-		});
-		currentHeight -= heightStep;
+            currentHeight, currentHeight + heightStep, 0., 0., 0., 0., 0.
+        });
+        currentHeight += heightStep;
 	}
 
-	currentHeight = layers1[centralIndex][1];
+    std::sort(
+        mesh.begin(),
+        mesh.end(),
+        [](std::vector<double> vec1, std::vector<double> vec2)->bool{
+            return vec1[0] < vec2[0];
+        }
+    );
+	std::cout<<"layers1: "<<std::endl;
+    ai::print(layers1);
 
-	for (std::size_t i = centralIndex + 1; i < layers1.size(); ++i) {
-		mesh.push_back(std::vector<double>{
-			currentHeight, currentHeight + heightStep, 0., 0., 0., 0., 0.
-		});
-		currentHeight += heightStep;
-	}
+	std::cout<<"mesh: "<<std::endl;
+    ai::print(mesh);
 
-	std::sort(
-		mesh.begin(),
-		mesh.end(),
-		[](std::vector<double> vec1, std::vector<double> vec2)->bool {
-		return vec1[0] < vec2[0];
-	}
-	);
-	std::cout << "layers1: " << std::endl;
-	ai::print(layers1);
+    for(std::size_t j = 0; j < mesh.size(); ++j){
+        std::size_t indexStart  = 0;
+        std::size_t indexFinish = 0;
 
-	for (std::size_t j = 0; j < mesh.size(); ++j) {
-		std::size_t indexStart = 0;
-		std::size_t indexFinish = 0;
+        double heightStart = mesh[j][0];
+        double heightFinish = mesh[j][1];
+        std::cout<<" "<<std::endl;
+        for(std::size_t i = 0; i < layers1.size(); ++i){
+            if(layers1[i][0] <= heightStart && heightStart <= layers1[i][1]){
+                indexStart = i;
+            }
+            if(layers1[i][0] <= heightFinish && heightFinish <= layers1[i][1]){
+                indexFinish = i;
+            }
+        }
+        std::cout<<"indexStart = "<<indexStart<<"  indexFinish = "<<indexFinish<<std::endl;
+        if(indexStart == indexFinish){
+            size_t nextindex = (indexStart+1);//>layers1.size()-1 ? indexStart : indexStart+1;
 
-		double heightStart = mesh[j][0];
-		double heightFinish = mesh[j][1];
-		std::cout << " " << std::endl;
-		for (std::size_t i = 0; i < layers1.size(); ++i) {
-			if (layers1[i][0] <= heightStart && heightStart <= layers1[i][1]) {
-				indexStart = i;
-			}
-			if (layers1[i][0] <= heightFinish && heightFinish <= layers1[i][1]) {
-				indexFinish = i;
-			}
-		}
-		if (indexStart == indexFinish) {
-			double sigmaValue = layers1[indexStart][2]
-				* (heightFinish - heightStart) +
-				(dx - heightFinish + heightStart)*layers1[indexStart + 1][2];
+            double sigmaValue = layers1[nextindex][2]
+            *(heightFinish-heightStart) +
+            (dx-heightFinish+heightStart)*layers1[nextindex][2] ;
 
-			double young = layers1[indexStart][3] * (heightFinish - heightStart)
-				+ (dx - heightFinish + heightStart)*layers1[indexStart + 1][3];
+            std::cout<<"sigmaValue = "<<sigmaValue<<std::endl;
 
-			double poisson = layers1[indexStart][4]
-				* (heightFinish - heightStart) +
-				(dx - heightFinish + heightStart)*layers1[indexStart + 1][4];
+            double young = layers1[indexStart][3] *(heightFinish-heightStart)
+            + (dx-heightFinish+heightStart)*layers1[nextindex][3];
 
-
-			double carter = layers1[indexStart][5]
-				* (heightFinish - heightStart) +
-				(dx - heightFinish + heightStart)*layers1[indexStart + 1][5];
-
-			double kin = layers1[indexStart][6]
-				* (heightFinish - heightStart) +
-				(dx - heightFinish + heightStart)*layers1[indexStart + 1][6];
+            double poisson = layers1[indexStart][4]
+            *(heightFinish-heightStart) +
+            (dx-heightFinish+heightStart)*layers1[nextindex][4];
 
 
-			mesh[j][2] = sigmaValue / dx;
+            double carter = layers1[indexStart][5]
+            *(heightFinish-heightStart) +
+            (dx-heightFinish+heightStart)*layers1[nextindex][5];
 
-			mesh[j][3] = young / dx;
-
-			mesh[j][4] = poisson / dx;
-
-			mesh[j][5] = carter / dx;
-
-			mesh[j][6] = kin / dx;
+            double kin = layers1[indexStart][6]
+            *(heightFinish-heightStart) +
+            (dx-heightFinish+heightStart)*layers1[nextindex][6];
 
 
-		}
-		else {
-			std::cout << "indexStart = " << indexStart << "  indexFinish = " << indexFinish << std::endl;
-			double sigmaValue = (layers1[indexStart][1] - heightStart)
-				* layers1[indexStart][2];
+            mesh[j][2] = sigmaValue/dx;
 
-			double young = (layers1[indexStart][1] - heightStart)
-				* layers1[indexStart][3];
+            mesh[j][3] = young/dx;
 
-			double poisson = (layers1[indexStart][1] - heightStart)
-				* layers1[indexStart][4];
+            mesh[j][4] = poisson/dx;
 
-			double carter = (layers1[indexStart][1] - heightStart)
-				* layers1[indexStart][5];
+            mesh[j][5] = carter/dx;
 
-			double kin = (layers1[indexStart][1] - heightStart)
-				* layers1[indexStart][6];
+            mesh[j][6] = kin/dx;
 
 
-			std::cout << heightStart << "/" << heightFinish << " " << sigmaValue << " ixj " << indexStart << " " << indexFinish << std::endl;
+        }else{
+            std::cout<<"indexStart = "<<indexStart<<"  indexFinish = "<<indexFinish<<std::endl;
+            double sigmaValue = (layers1[indexStart][1] - heightStart)
+                * layers1[indexStart][2];
 
-			for (std::size_t i = indexStart + 1; i < indexFinish; ++i) {
-				sigmaValue += std::abs(layers1[i][1] - layers1[i][0]) * layers1[i][2];
-				young += std::abs(layers1[i][1] - layers1[i][0]) * layers1[i][3];
-				poisson += std::abs(layers1[i][1] - layers1[i][0]) * layers1[i][4];
-				carter += std::abs(layers1[i][1] - layers1[i][0]) * layers1[i][5];
-				kin += std::abs(layers1[i][1] - layers1[i][0]) * layers1[i][6];
-			}
+             double young = (layers1[indexStart][1] - heightStart)
+                * layers1[indexStart][3];
 
-			std::cout << heightStart << "/" << heightFinish << " " << sigmaValue << " ixj " << indexStart << " " << indexFinish << std::endl;
+             double poisson = (layers1[indexStart][1] - heightStart)
+                * layers1[indexStart][4];
 
-			sigmaValue += (heightFinish - layers1[indexFinish][0])
-				* layers1[indexFinish][2];
+             double carter = (layers1[indexStart][1] - heightStart)
+                * layers1[indexStart][5];
 
-			young += (heightFinish - layers1[indexFinish][0])
-				* layers1[indexFinish][3];
+            double kin = (layers1[indexStart][1] - heightStart)
+                * layers1[indexStart][6];
 
-			poisson += (heightFinish - layers1[indexFinish][0])
-				* layers1[indexFinish][4];
 
-			carter += (heightFinish - layers1[indexFinish][0])
-				* layers1[indexFinish][5];
+            std::cout << heightStart << "/" << heightFinish << " " << sigmaValue << " ixj " << indexStart << " " << indexFinish << std::endl;
 
-			kin += (heightFinish - layers1[indexFinish][0])
-				* layers1[indexFinish][6];
-			std::cout << heightStart << "/" << heightFinish << " " << sigmaValue << " ixj " << indexStart << " " << indexFinish << std::endl;
+            for(std::size_t i = indexStart + 1; i < indexFinish; ++i){
+                sigmaValue += std::abs(layers1[i][1] - layers1[i][0]) * layers1[i][2];
+                young += std::abs(layers1[i][1] - layers1[i][0]) * layers1[i][3];
+                poisson += std::abs(layers1[i][1] - layers1[i][0]) * layers1[i][4];
+                carter += std::abs(layers1[i][1] - layers1[i][0]) * layers1[i][5];
+                kin += std::abs(layers1[i][1] - layers1[i][0]) * layers1[i][6];
+            }
 
-			sigmaValue /= heightFinish - heightStart;
+            std::cout << heightStart << "/" << heightFinish << " " << sigmaValue << " ixj " << indexStart << " " << indexFinish << std::endl;
 
-			young /= heightFinish - heightStart;
+            sigmaValue += (heightFinish - layers1[indexFinish][0])
+                * layers1[indexFinish][2];
 
-			poisson /= heightFinish - heightStart;
+            young += (heightFinish - layers1[indexFinish][0])
+                * layers1[indexFinish][3];
 
-			carter /= heightFinish - heightStart;
+            poisson += (heightFinish - layers1[indexFinish][0])
+                * layers1[indexFinish][4];
 
-			kin /= heightFinish - heightStart;
+            carter += (heightFinish - layers1[indexFinish][0])
+                * layers1[indexFinish][5];
 
-			mesh[j][2] = sigmaValue;
+            kin += (heightFinish - layers1[indexFinish][0])
+                * layers1[indexFinish][6];
+            std::cout << heightStart << "/" << heightFinish << " " << sigmaValue << " ixj " << indexStart << " " << indexFinish << std::endl;
 
-			mesh[j][3] = young;
+            sigmaValue /= heightFinish - heightStart;
 
-			mesh[j][4] = poisson;
+            young /= heightFinish - heightStart;
 
-			mesh[j][5] = carter;
+            poisson /= heightFinish - heightStart;
 
-			mesh[j][6] = kin;
+            carter /= heightFinish - heightStart;
+
+            kin /= heightFinish - heightStart;
+
+            mesh[j][2] = sigmaValue;
+
+            mesh[j][3] = young;
+
+            mesh[j][4] = poisson;
+
+            mesh[j][5] = carter;
+
+            mesh[j][6] = kin;
 
 
 
-			std::cout << heightStart << "/" << heightFinish << " " << sigmaValue << " ixj " << indexStart << " " << indexFinish << std::endl;
-		}
-	}
-	std::cout << "mesh: " << std::endl;
+            std::cout << heightStart << "/" << heightFinish << " " << sigmaValue << " ixj " << indexStart << " " << indexFinish << std::endl;
+            std::cout<<"mesh[j][6] = "<<mesh[j][6]<<std::endl;
+        }
+    }
+    std::cout<<"mesh: "<<std::endl;
 
-	std::sort(
-		mesh.begin(),
-		mesh.end(),
-		[](std::vector<double> vec1, std::vector<double> vec2)->bool {
-		return vec1[0] > vec2[0];
-	}
-	);
-	ai::print(mesh);
-	ai::save("./m", mesh);
-
+     std::sort(
+        mesh.begin(),
+        mesh.end(),
+        [](std::vector<double> vec1, std::vector<double> vec2)->bool{
+            return vec1[0] > vec2[0];
+        }
+    );
+    //ai::print(mesh);
+    ai::save("./m", mesh);
 	layers = mesh;
-
-	return;
-	//Обсчтываем все сверху продуктивного
-
-	//////////////////////////////////////////////////////////////////////////////////////////
-	//End function ApproximateLayers
-	//////////////////////////////////////////////////////////////////////////////////////////
+    return;
 }
+/*!
+\brief  �������������� �������� ������ � ��������
+
+\details ������� ���������� ���������� � �������� �����.
+
+\param[in,out] layers - ������� ��������� ��������
+*/
+// void ApproximateLayers(std::vector<std::vector<double> >&layers) {
+
+	// std::size_t num;
+	// double H;
+	// double dx;
+
+// //	ai::saveMatrix("layers_in", layers);
+	// //=======================================================================
+	// std::vector<std::vector<double> >la;
+		// for (size_t i = layers.size(); i > 0; ) {
+		// --i;
+		// la.push_back(std::vector<double>{layers[i][0], layers[i][1], layers[i][2], layers[i][3], layers[i][4], layers[i][5]});
+	// }
+	// layers = la;
+	// la.clear();
+// //=======================================================================
+// //	ai::saveMatrix("layers_sort", layers);
+
+	// for (std::size_t i = 1; i < layers.size(); ++i) {
+		// if (layers[i][0] * layers[i][1] <= 0.) {
+			// H = layers[i][1] - layers[i][0];
+			// num = i;
+			// break;
+		// }
+
+	// }
+	// dx = 0.09 * H;
+	// double sigma = layers[num][2];
+	// //std::cout<<"sigma = "<<sigma<<std::endl;
+	// std::cout << "Heigth of centeral layer = " << H << "    number = " << num << std::endl;
+	// std::vector<std::size_t> sloi;
+
+	// double h;
+	// double hnew;
+	// if (H <= 11.2) {
+		// std::cout << "H less than 11.2!!!!" << std::endl;
+		// //H = 11.2;
+
+		// std::size_t it;
+		// it = num;
+
+		// sloi.push_back(it);
+
+		// h = layers[it][1] - layers[it][0];
+		// it--;
+
+
+		// while (11.2 / 2. > std::abs(layers[it][1])) {
+			// //ai::printMarker();
+			// //std::cout<<"std::abs(layers[it][0]))= "<<std::abs(layers[it][0])<<std::endl;
+
+			// hnew = layers[it][1] - layers[it][0];
+
+			// sigma = (sigma * h + hnew * layers[it][2]) / (h + hnew);
+			// h = h + hnew;
+			// //std::cout<<"h = "<<h<<"    h new = "<<hnew<<"  sigma = "<<sigma<<std::endl;
+
+			// sloi.push_back(it);
+			// it--;
+		// }
+
+
+		// it = num + 1;
+
+		// while (11.2 / 2. > layers[it][0]) {
+			// //ai::printMarker();
+			// //std::cout<<"std::abs(layers[it][0]))= "<<std::abs(layers[it][0])<<std::endl;
+
+			// hnew = layers[it][1] - layers[it][0];
+
+			// sigma = (sigma * h + hnew * layers[it][2]) / (h + hnew);
+			// h += hnew;
+			// //std::cout<<"h = "<<h<<"    h new = "<<hnew<<"  sigma = "<<sigma<<std::endl;
+
+			// sloi.push_back(it);
+			// it++;
+
+		// }
+		// H = 11.2;
+		// dx = 0.09 * H;
+	// }
+
+	// if (H > 11.2) {
+
+		// std::size_t it;
+		// it = num;
+
+		// sloi.push_back(it);
+
+		// h = layers[it][1] - layers[it][0];
+		// it--;
+
+		// //while(  11.2/2. > std::abs(layers[it][1])){
+		// //ai::printMarker();
+		// //std::cout<<"std::abs(layers[it][0]))= "<<std::abs(layers[it][0])<<std::endl;
+
+		// hnew = layers[it][1] - layers[it][0];
+
+		// sigma = (sigma * h + hnew * layers[it][2]) / (h + hnew);
+		// h = h + hnew;
+		// //std::cout<<"h = "<<h<<"    h new = "<<hnew<<"  sigma = "<<sigma<<std::endl;
+
+		// sloi.push_back(it);
+		// it--;
+		// //}
+
+
+		// it = num + 1;
+
+		// //while(11.2/2. > layers[it][0]){
+		// //ai::printMarker();
+		// //std::cout<<"std::abs(layers[it][0]))= "<<std::abs(layers[it][0])<<std::endl;
+
+		// hnew = layers[it][1] - layers[it][0];
+
+		// sigma = layers[num][2];
+		// h += hnew;
+		// std::cout << "h = " << h << "    h new = " << hnew << "  sigma = " << sigma << std::endl;
+
+		// sloi.push_back(it);
+		// it++;
+
+		// //}
+	// }
+
+	// ai::printVector(sloi);
+
+	// std::size_t min = ai::min(sloi);
+	// std::size_t max = ai::max(sloi);
+	// ai::printMarker();
+	// std::vector<std::vector<double> > layers1;
+
+	// for (size_t i = 0; i < layers.size(); i++) {
+		// layers1.push_back(std::vector<double>{layers[i][0], layers[i][1], layers[i][2], layers[i][3], layers[i][4], layers[i][5]});
+		// if (i == min) {
+			// layers1.push_back(std::vector<double>{-H / 2., H / 2., sigma, layers[i][3], layers[i][4], layers[i][5]});
+			// i = max - 1;
+		// }
+
+	// }
+	// // ������������ ����������� �����
+
+
+	// for (size_t i = 0; i < layers1.size(); i++) {
+		// if (layers1[i][0] * layers1[i][1] < 0.) num = i;
+	// }
+
+	// for (size_t i = 0; i < layers1.size() - 1; ++i) {
+		// if (layers1[i][1] > layers1[i + 1][0]) {
+
+			// if (i != num)
+				// layers1[i][1] = layers1[i + 1][0];
+
+			// if (i == num)
+				// layers1[i + 1][0] = layers1[i][1];
+
+		// }
+		// // if(std::abs(layers[i][1]) > std::abs(layers[i+1][0]) ){
+		// //     layers1[i+1][0]= layers1[i][1];
+		// // }
+	// }
+	// std::vector<std::vector<double> > mesh;
+	// //���������� ��� ������ �������������
+
+	// //��� ������������ ����
+	// mesh.push_back(std::vector<double>{layers1[num][0], layers1[num][1],
+
+		// layers1[num][2], layers1[num][3], layers1[num][4], layers1[num][5]});
+	// double up = layers1[num][0];
+
+	// while (std::abs(layers1[0][0]) > std::abs(up)) {
+		// mesh.push_back(std::vector<double>{up - dx, up, 0, 0, 0, 0});
+		// up -= dx;
+	// }
+
+	// std::cout << "STEP = " << dx << std::endl;
+	// // std::cout<<"mesh:"<<std::endl;
+	// // ai::printMatrix(mesh);
+
+	// std::vector<std::vector<double> > mesh1;
+	// for (size_t i = mesh.size() - 1; i>0; --i) {
+		// mesh1.push_back(std::vector<double>{mesh[i][0], mesh[i][1], mesh[i][2], mesh[i][3], mesh[i][4], mesh[i][5] });
+	// }
+	// mesh1.push_back(std::vector<double>{layers1[num][0], layers1[num][1],
+
+		// layers1[num][2], layers1[num][3], layers1[num][4], layers1[num][5]});
+
+
+
+
+	// up = layers1[num][1];
+	// //std::cout<<"up = "<<up<<std::endl;
+	// size_t f = layers1.size() - 1;
+	// //ai::printMarker();
+	// while (std::abs(layers1[f][1]) > std::abs(up)) {
+		// //ai::printMarker();
+		// mesh1.push_back(std::vector<double>{up, up + dx, 0, 0, 0, 0});
+		// up += dx;
+	// }
+	// mesh.clear();
+
+
+
+	// double eps = pow(10, -8);
+
+	// //���� �� ������� mesh1
+	// // for(size_t i = 0 ;i<mesh1.size(); ++i){
+	// //     if(mesh1[i][2] < eps){
+	// //         for(size_t j = 0 ; j < layers1.size(); ++j){
+	// //             if((std::abs(mesh1[i][0]) <= std::abs(layers1[j][0])) && (std::abs(mesh1[i][1]) >= std::abs(layers1[j][1])) )
+	// //                 mesh1[i][2] = layers1[j][2];
+	// //             }
+	// //         }
+	// // }
+	// size_t middle;
+	// for (size_t i = 0; i < mesh1.size(); ++i) {
+		// if (mesh1[i][0] * mesh1[i][1] < 0.) {
+			// middle = i;
+			// break;
+		// }
+	// }
+	// std::cout << "middle = " << middle << std::endl;
+	// double rastlayer;
+	// double rastmesh;
+	// double dl;
+	// double hadd;
+
+
+	// size_t j = middle - 1;
+
+
+	// for (size_t i = num - 1; i >= 0; --i) {  //���� �� ����� layers1 i - ��������
+		// std::cout << " " << std::endl;
+		// std::cout << "iteration = " << i << std::endl;
+		// h = layers1[i][1] - layers1[i][0];     //j - �������� �� mesh1
+		// std::cout << "h curent layer = " << h << std::endl;
+		// dl = std::ceil(h / dx);
+		// std::cout << "Number of dx in layer  = " << dl << std::endl;
+		// if ((int)dl == 1) {
+			// std::cout << "number of dx in layer = " << dl << std::endl;
+			// std::cout << "j = " << j << std::endl;
+			// std::cout << "i = " << i << std::endl;
+			// ai::printMarker();
+			// mesh1[j][2] += h * layers1[i][2];
+			// mesh1[j][3] += h * layers1[i][3];
+			// mesh1[j][4] += h * layers1[i][4];
+			// mesh1[j][5] += h * layers1[i][5];
+			// std::cout << "mesh1 = " << mesh1[j][2] << std::endl;
+			// if (i >= 0) {
+				// //ai::printMarker();
+				// i--;
+				// mesh1[j][2] += (dx - h)*layers1[i][2];
+				// mesh1[j][3] += (dx - h)*layers1[i][3];
+				// mesh1[j][4] += (dx - h)*layers1[i][4];
+				// mesh1[j][5] += (dx - h)*layers1[i][5];
+
+				// mesh1[j][2] /= dx;
+				// mesh1[j][3] /= dx;
+				// mesh1[j][4] /= dx;
+				// mesh1[j][5] /= dx;
+			// }
+			// std::cout << "mesh1 = " << mesh1[j][2] << std::endl;
+			// i++;
+			// j--;
+		// }
+
+		// if ((int)dl > 1) {
+			// int iter = 0;
+			// std::cout << "j = " << j << std::endl;
+			// std::cout << "i = " << i << std::endl;
+			// double dh;
+
+			// while (iter < (int)dl) {
+				// if (j >= 0) {
+					// ai::printMarker();
+					// // dh =
+					// mesh1[j][2] = layers1[i][2];
+					// mesh1[j][3] = layers1[i][3];
+					// mesh1[j][4] = layers1[i][4];
+					// mesh1[j][5] = layers1[i][5];
+					// if (j == 0) { break; }
+
+					// j--;
+
+				// }
+				// iter++;
+				// std::cout << "j = " << j << "   iter = " << iter << std::endl;
+				// //if((int)dl == 1) j--;
+			// }
+			// // j++;
+			// //i++;
+		// }
+		// if (i == 0) { break; }
+		// //if (j==0){break;}
+	// }
+	// // std::cout<<"Up is fineshed"<<std::endl;
+	// // std::cout<<" "<<std::endl;
+	// // std::cout<<" "<<std::endl;
+	// // std::cout<<" "<<std::endl;
+	// j = middle + 1;
+
+
+	// for (size_t i = num + 1; i < layers1.size(); ++i) {  //���� �� ����� layers1 i - ��������
+														 // // std::cout<<" "<<std::endl;
+														 // // std::cout<<"iteration = "<<i<<std::endl;
+		// h = layers1[i][1] - layers1[i][0];     //j - �������� �� mesh1
+											   // // std::cout<<"h curent layer = "<<h<<std::endl;
+		// dl = std::floor(h / dx + 0.51);
+		// // std::cout<<"number of dx in layer = "<<dl<<std::endl;
+		// if ((int)dl == 1) {
+			// // std::cout<<"i = " <<i<<"    j = "<<j<<std::endl;
+
+			// mesh1[j][2] += h * layers1[i][2];
+			// mesh1[j][3] += h * layers1[i][3];
+			// mesh1[j][4] += h * layers1[i][4];
+			// mesh1[j][5] += h * layers1[i][5];
+			// // std::cout<<"h= "<< h<<"*"<<"layers1[i][2]"<<layers1[i][2]<<" = "<<mesh1[j][2]<<std::endl;
+			// //std::cout<<"layers1[i][2] = "<<layers1[i][2]<<std::endl;
+
+			// if (i < layers1.size()) {
+				// i++;
+				// mesh1[j][2] += (dx - h)*layers1[i][2];
+				// mesh1[j][3] += (dx - h)*layers1[i][3];
+				// mesh1[j][4] += (dx - h)*layers1[i][4];
+				// mesh1[j][5] += (dx - h)*layers1[i][5];
+
+				// // std::cout<<"dx - h= "<< dx-h<<"*"<<"layers1[i][2] = "<<layers1[i][2]<<" = "<<(dx-h)*layers1[i][2]<<std::endl;
+			// }
+			// // std::cout<<"mesh1 = "<<mesh1[j][2]<<std::endl;
+			// i--;
+			// j++;
+		// }
+
+		// if ((int)dl > 1) {
+			// int iter = 0;
+			// // std::cout<<"j = "<<j<<std::endl;
+			// // std::cout<<"i = "<<i<<std::endl;
+			// // std::cout<<"number of layers = "<<(int)dl<<std::endl;
+
+			// h = 0;
+			// while (iter <= (int)dl) {
+				// if (j < mesh1.size()) {
+					// mesh1[j][2] = layers1[i][2];
+					// mesh1[j][3] = layers1[i][3];
+					// mesh1[j][4] = layers1[i][4];
+					// mesh1[j][5] = layers1[i][5];
+
+					// if (j == mesh1.size() - 1) { break; }
+
+					// j++;
+				// }
+				// iter++;
+				// //std::cout<<"j = "<<j<<"   iter = "<<iter<<std::endl;
+			// }
+			// if (i == layers1.size() - 1) { break; }
+			// if (j == mesh1.size() - 1) { break; }
+			// //j++;
+			// //i++;
+		// }
+	// }
+
+	// std::vector<std::vector<double> > mesh2;
+	// double start, end;
+	// // ai::printMarker();
+	// for (size_t i = 0; i < mesh1.size() - 1; ++i) {
+		// // ai::printMarker();
+		// sigma = mesh1[i][2];
+		// end = mesh1[i][1];
+		// start = mesh1[i][0];
+		// while (mesh1[i][2] == mesh1[i + 1][2]) {
+			// //std::cout<<" i = "<<i<<std::endl;
+			// //std::cout<<"Sigma ="<<sigma<<std::endl;
+			// sigma = mesh1[i + 1][2];
+			// end = mesh1[i + 1][1];
+			// i++;
+
+			// if (i == mesh1.size() - 1) { break; }
+
+		// }
+		// mesh2.push_back(std::vector<double>{start, end, sigma, mesh1[i][3], mesh1[i][4], mesh1[i][5]});
+
+
+	// }
+
+	// for (size_t i = 0; i < mesh2.size(); ++i) {
+		// if (mesh2[i][1] * mesh2[i][0]<0.) {
+			// middle = i;
+			// break;
+		// }
+	// }
+
+	// for (size_t i = middle; i>1; --i) {
+		// if (mesh2[i - 1][2] - mesh2[i][2]>6.) {
+			// mesh2[i - 1][2] = 6. + mesh[i][2];
+			// std::cout << ">6" << std::endl;
+		// }
+	// }
+
+	// for (size_t i = middle; i<mesh2.size() - 1; ++i) {
+		// if (mesh2[i + 1][2] - mesh2[i][2]>6.) {
+			// mesh2[i + 1][2] = 6. + mesh[i][2];
+			// std::cout << ">6" << std::endl;
+		// }
+	// }
+	// std::cout << "mesh2:" << std::endl;
+	// std::cout << "middle = " << middle << std::endl;
+	// // layers.resize(mesh2.size());
+	// // for(size_)
+
+	// ai::printMatrix(mesh2);
+// //	ai::saveMatrix("mesh2", mesh2);
+
+	// layers.clear();
+	// std::vector<std::vector<double> > layerss;
+	// // for(size_t i =0 ; i < mesh2.size(); ++i){
+	// //     layers[i].resize(mesh2.size());
+	// // }
+	// ai::printMarker();
+	// for (size_t i = mesh2.size(); i > 0; ) {
+		// --i;
+		// layerss.push_back(std::vector<double>{mesh2[i][0], mesh2[i][1], mesh2[i][2], mesh2[i][3], mesh2[i][4], mesh2[i][5]});
+		// std::cout << "iter = " << i << std::endl;
+	// }
+// //	ai::saveMatrix("layerss", layerss);
+	// std::cout << "mesh1:" << std::endl;
+	// ai::printMatrix(mesh1);
+
+
+	// std::cout << "New layers" << std::endl;
+	// ai::printMatrix(layers1);
+
+	// layers = layerss;
+// //////////////////////////////////////////////////////////////////////////////////////////
+// //End function ApproximateLayers
+// //////////////////////////////////////////////////////////////////////////////////////////
+	// return;
+// }

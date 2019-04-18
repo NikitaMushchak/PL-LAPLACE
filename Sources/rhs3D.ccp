@@ -185,6 +185,7 @@ void calculateOpeningAndConcentrationSpeeds(
     std::vector< std::vector<size_t> > &index,
     std::vector< std::vector<size_t> > &activeElements,
     std::vector< std::vector<bool> > &elementIsActive,
+    std::vector< std::vector<Cell> > &mesh,
     std::vector<double> &activationTime,
     double currentTime,
     double fluidDensity,
@@ -224,10 +225,27 @@ void calculateOpeningAndConcentrationSpeeds(
     double pressureDrop;
     double openingOnTheBorder;
     double concentrationOnTheBorder;
+    bool tip;
 
     for(std::size_t k = 0; k < activeElements.size(); ++k){
         const size_t i = activeElements[k][0];
         const size_t j = activeElements[k][1];
+
+        tip = false;
+
+        if(mesh[i+1][j].type == OUTSIDE ||
+            mesh[i][j+1].type == OUTSIDE ||
+            mesh[i-1][j].type == OUTSIDE ||
+            mesh[i][j-1].type == OUTSIDE ||
+            mesh[i+1][j-1].type == OUTSIDE ||
+            mesh[i-1][j-1].type == OUTSIDE ||
+            mesh[i-1][j+1].type == OUTSIDE ||
+            mesh[i+1][j+1].type == OUTSIDE
+            ){
+
+            tip = true;
+        }
+
 
         fluidFlowRight = 0.;
         fluidFlowBottom = 0.;
@@ -236,135 +254,168 @@ void calculateOpeningAndConcentrationSpeeds(
         settlingFlow = 0.;
         pressureIJ = pressure[index[i][j]];
 
-        /// Расчёт потоков жидкости и пропанта
+        if(tip){
+            std::cout<<"IN"<<std::endl;
+            if(elementIsActive[i + 1][j]){
+                pressureDrop = pressure[index[i + 1][j]] - pressureIJ;
+                openingOnTheBorder = 0.5
+                    * ( opening[index[i][j]] + opening[index[i + 1][j]] );
+                concentrationOnTheBorder = 0.5
+                    * (concentration[index[i][j]] + concentration[index[i + 1][j]]);
+                fluidFlowRight = ai::sign(pressureDrop)
+                    * std::pow(openingOnTheBorder, WPow)
+                    * std::pow(std::abs(pressureDrop) / dx, PPow)
+                    / std::pow(
+                        1. - concentrationOnTheBorder / 0.6, // / maximumConcentration,
+                        CPow
+                    );
 
-        if(elementIsActive[i + 1][j]){
-            pressureDrop = pressure[index[i + 1][j]] - pressureIJ;
-            openingOnTheBorder = 0.5
-                * (opening[index[i][j]] + opening[index[i + 1][j]]);
-            concentrationOnTheBorder = 0.5
-                * (concentration[index[i][j]] + concentration[index[i + 1][j]]);
-            fluidFlowRight = ai::sign(pressureDrop)
-                * std::pow(openingOnTheBorder, WPow)
-                * std::pow(std::abs(pressureDrop) / dx, PPow)
-                / std::pow(
-                    1. - concentrationOnTheBorder / 0.6, // / maximumConcentration,
-                    CPow
-                );
-                if(opening[ index[i+1][j] ] < epsilon && fluidFlowRight > 0.){
-                    fluidFlowRight = 0.;
-                    // std::cout<<"\nRight flows: "<<" opening[index[i+1][i]] = "
-                    // <<opening[ index[i+1][j] ]<<" i+1 = "<<i+1<<"  j = "
-                    // <<j;
-                }
-                // if(opening[ index[i][i] ] < epsilon && fluidFlowRight < 0.){
-                //     fluidFlowRight = 0.;
-                // }
-
-            if(
-                openingOnTheBorder > epsilon
-                && !(
-                    (concentration[index[i][j]] >= maximumConcentration && pressureDrop > 0)
-                    || (concentration[index[i + 1][j]] >= maximumConcentration && pressureDrop < 0)
-                )
-            ){
-                proppantFlowRight = fluidFlowRight / openingOnTheBorder;
-
-                if(0. < proppantFlowRight){
-                    proppantFlowRight *= concentration[index[i + 1][j]]
-                        * opening[index[i + 1][j]];
-                }else{
-                    proppantFlowRight *= concentration[index[i][j]]
-                        * opening[index[i][j]];
-                }
-
-                //////////
-
-            }
-        }
-        if(elementIsActive[i][j + 1]){
-            pressureDrop = pressure[index[i][j + 1]] - pressureIJ;
-            openingOnTheBorder = 0.5
-                * (opening[index[i][j]] + opening[index[i][j + 1]]);
-            concentrationOnTheBorder = 0.5
-                * (concentration[index[i][j]] + concentration[index[i][j + 1]]);
-            fluidFlowBottom = ai::sign(pressureDrop)
-                * std::pow(openingOnTheBorder, WPow)
-                * std::pow(std::abs(pressureDrop) / dy, PPow)
-                / std::pow(
-                    1. - concentrationOnTheBorder / 0.6,// / maximumConcentration,
-                    CPow
-                );
-                // if(std::abs(opening[index[i][j + 1]]) < epsilon && fluidFlowBottom < 0.){
-                //     fluidFlowBottom = 0.;
-                // }
-// ai::sign(j + 1 - j00) *
-                //Сверху
-                if(opening[index[i][j]] < epsilon && j - j00 > 0 && fluidFlowBottom < 0.){
-                    fluidFlowBottom = 0.;
-                    // std::cout<<"IN UP:"<<"i = "<<i<<" j = "<<j<<std::endl;
-                }
-                //Снизу
-                if(opening[index[i][j+1]] < epsilon && j + 1 - j00 > 0 && fluidFlowBottom > 0.){
-                    fluidFlowBottom = 0.;
-                    // std::cout<<"IN DOWN:"<<"i = "<<i<<" j = "<<j<<std::endl;
-                }
-
-                //Сверху
-                if(opening[index[i][j]] < epsilon && j - j00 < 0 && fluidFlowBottom > 0.){
-                    fluidFlowBottom = 0.;
-                    // std::cout<<"IN UP:"<<"i = "<<i<<" j = "<<j<<std::endl;
-                }
-                //Снизу
-                if(opening[index[i][j+1]] < epsilon && j + 1 - j00 < 0 && fluidFlowBottom < 0.){
-                    fluidFlowBottom = 0.;
-                    // std::cout<<"IN DOWN:"<<"i = "<<i<<" j = "<<j<<std::endl;
-                }
-
-
-                // if(j == 63 ){
-                //     std::cout<<"\npressureDrop = "<<pressureDrop<<
-                //     " opening[index[i][j]] = "<<opening[index[i][j]]<<
-                //     " opening[index[i][j+1]] = "<<opening[index[i][j+1]]<<
-                //     " i = "<<i<<" j + 1 = "<<j + 1<<" fluidFlowBottom = "<<
-                //     fluidFlowBottom<<" j00 = "<<j00<<std::endl;
-                // }
-                // Снизу трещины
-                // if(opening[index[i][j]] < epsilon && j - j00 < 0 && fluidFlowBottom < 0.){
-                //     fluidFlowBottom = 0.;
-                // }
-            if(
-                true
-            ){
                 if(
                     openingOnTheBorder > epsilon
                     && !(
                         (concentration[index[i][j]] >= maximumConcentration && pressureDrop > 0)
-                        || (concentration[index[i][j + 1]] >= maximumConcentration && pressureDrop < 0)
+                        || (concentration[index[i + 1][j]] >= maximumConcentration && pressureDrop < 0)
                     )
                 ){
-                    proppantFlowBottom = fluidFlowBottom / openingOnTheBorder;
+                    proppantFlowRight = fluidFlowRight / openingOnTheBorder;
+
+                    if(0. < proppantFlowRight){
+                        proppantFlowRight *= concentration[index[i + 1][j]]
+                            * opening[index[i + 1][j]];
+                    }else{
+                        proppantFlowRight *= concentration[index[i][j]]
+                            * opening[index[i][j]];
+                    }
                 }
+            }
+
+            if(elementIsActive[i][j + 1]){
+                pressureDrop = pressure[index[i][j + 1]] - pressureIJ;
+                openingOnTheBorder = 0.5
+                    * (opening[index[i][j]] + opening[index[i][j + 1]]);
+                concentrationOnTheBorder = 0.5
+                    * (concentration[index[i][j]] + concentration[index[i][j + 1]]);
+                fluidFlowBottom = ai::sign(pressureDrop)
+                    * std::pow(openingOnTheBorder, WPow)
+                    * std::pow(std::abs(pressureDrop) / dy, PPow)
+                    / std::pow(
+                        1. - concentrationOnTheBorder / 0.6,// / maximumConcentration,
+                        CPow
+                    );
+
+                if(
+                    true
+                ){
+                    if(
+                        openingOnTheBorder > epsilon
+                        && !(
+                            (concentration[index[i][j]] >= maximumConcentration && pressureDrop > 0)
+                            || (concentration[index[i][j + 1]] >= maximumConcentration && pressureDrop < 0)
+                        )
+                    ){
+                        proppantFlowBottom = fluidFlowBottom / openingOnTheBorder;
+                    }
 
 
-                settlingFlow = settlingVelocity * (
-                    1. - concentrationOnTheBorder / 0.6
-                );
+                    settlingFlow = settlingVelocity * (
+                        1. - concentrationOnTheBorder / 0.6
+                    );
 
-                if(0. < proppantFlowBottom){
-                    proppantFlowBottom *= concentration[index[i][j + 1]]
-                        * opening[index[i][j + 1]];
-                    settlingFlow *= concentration[index[i][j + 1]]
-                        * opening[index[i][j + 1]];
-                }else{
-                    proppantFlowBottom *= concentration[index[i][j]]
-                        * opening[index[i][j]];
-                    settlingFlow *= concentration[index[i][j]]
-                        * opening[index[i][j]];
+                    if(0. < proppantFlowBottom){
+                        proppantFlowBottom *= concentration[index[i][j + 1]]
+                            * opening[index[i][j + 1]];
+                        settlingFlow *= concentration[index[i][j + 1]]
+                            * opening[index[i][j + 1]];
+                    }else{
+                        proppantFlowBottom *= concentration[index[i][j]]
+                            * opening[index[i][j]];
+                        settlingFlow *= concentration[index[i][j]]
+                            * opening[index[i][j]];
+                    }
+                }
+            }
+
+        }
+        /// Расчёт потоков жидкости и пропанта
+        else{
+            if(elementIsActive[i + 1][j]){
+                pressureDrop = pressure[index[i + 1][j]] - pressureIJ;
+                openingOnTheBorder = 0.5
+                    * ( opening[index[i][j]] + opening[index[i + 1][j]] );
+                concentrationOnTheBorder = 0.5
+                    * (concentration[index[i][j]] + concentration[index[i + 1][j]]);
+                fluidFlowRight = ai::sign(pressureDrop)
+                    * std::pow(openingOnTheBorder, WPow)
+                    * std::pow(std::abs(pressureDrop) / dx, PPow)
+                    / std::pow(
+                        1. - concentrationOnTheBorder / 0.6, // / maximumConcentration,
+                        CPow
+                    );
+
+                if(
+                    openingOnTheBorder > epsilon
+                    && !(
+                        (concentration[index[i][j]] >= maximumConcentration && pressureDrop > 0)
+                        || (concentration[index[i + 1][j]] >= maximumConcentration && pressureDrop < 0)
+                    )
+                ){
+                    proppantFlowRight = fluidFlowRight / openingOnTheBorder;
+
+                    if(0. < proppantFlowRight){
+                        proppantFlowRight *= concentration[index[i + 1][j]]
+                            * opening[index[i + 1][j]];
+                    }else{
+                        proppantFlowRight *= concentration[index[i][j]]
+                            * opening[index[i][j]];
+                    }
+                }
+            }
+            if(elementIsActive[i][j + 1]){
+                pressureDrop = pressure[index[i][j + 1]] - pressureIJ;
+                openingOnTheBorder = 0.5
+                    * (opening[index[i][j]] + opening[index[i][j + 1]]);
+                concentrationOnTheBorder = 0.5
+                    * (concentration[index[i][j]] + concentration[index[i][j + 1]]);
+                fluidFlowBottom = ai::sign(pressureDrop)
+                    * std::pow(openingOnTheBorder, WPow)
+                    * std::pow(std::abs(pressureDrop) / dy, PPow)
+                    / std::pow(
+                        1. - concentrationOnTheBorder / 0.6,// / maximumConcentration,
+                        CPow
+                    );
+
+                if(
+                    true
+                ){
+                    if(
+                        openingOnTheBorder > epsilon
+                        && !(
+                            (concentration[index[i][j]] >= maximumConcentration && pressureDrop > 0)
+                            || (concentration[index[i][j + 1]] >= maximumConcentration && pressureDrop < 0)
+                        )
+                    ){
+                        proppantFlowBottom = fluidFlowBottom / openingOnTheBorder;
+                    }
+
+
+                    settlingFlow = settlingVelocity * (
+                        1. - concentrationOnTheBorder / 0.6
+                    );
+
+                    if(0. < proppantFlowBottom){
+                        proppantFlowBottom *= concentration[index[i][j + 1]]
+                            * opening[index[i][j + 1]];
+                        settlingFlow *= concentration[index[i][j + 1]]
+                            * opening[index[i][j + 1]];
+                    }else{
+                        proppantFlowBottom *= concentration[index[i][j]]
+                            * opening[index[i][j]];
+                        settlingFlow *= concentration[index[i][j]]
+                            * opening[index[i][j]];
+                    }
                 }
             }
         }
-
         dWdt[index[i][j]] += (fluidFlowRight + fluidFlowBottom) / dx
             - leakOff[j] / std::sqrt(currentTime - activationTime[k]);
         dWdt[index[i + 1][j]] -= fluidFlowRight / dx;

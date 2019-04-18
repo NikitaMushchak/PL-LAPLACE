@@ -90,7 +90,6 @@ void findNewRibbons(
     double n,
     std::vector<double> &opening,
     std::vector<double> &leakOff,
-    std::vector<double> &toughness,
     std::vector< std::vector<Cell> > &mesh,
     std::vector< std::vector<size_t> > &index,
     std::vector< std::vector<size_t> > &activeElements,
@@ -117,7 +116,7 @@ void findNewRibbons(
 
         if(0 == regime){
             distances[i][j] = 0.25 * sqrt(0.5 * M_PI) * E * openingAtPoint
-                / toughness[j];
+                / Kic;
             distances[i][j] *= distances[i][j];
         }else{
             distances[i][j] = collectDistanceFromVelocity(
@@ -136,7 +135,7 @@ void findNewRibbons(
         }
     }
 
-    if(!elementIsAMember && d >= dCenter){
+    if(!elementIsAMember && d >= dCenter/* && j >= 57 && j <= 63*/){
         activeElements.push_back(std::vector<size_t>{i, j});
         elementIsActive[i][j] = true;
         activationTime.push_back(currentTime);

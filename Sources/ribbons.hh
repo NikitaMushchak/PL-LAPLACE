@@ -26,7 +26,6 @@ void findNewRibbons(
     double n,
     std::vector<double> &Wt,
     std::vector<double> &leakOff,
-    std::vector<double> &toughness,
     std::vector< std::vector<Cell> > &mesh,
     std::vector< std::vector<size_t> > &index,
     std::vector< std::vector<size_t> > &activeElements,
