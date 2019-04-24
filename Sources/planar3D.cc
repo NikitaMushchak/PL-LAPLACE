@@ -582,7 +582,7 @@ int calculateEverything(
     std::size_t step = 0;
     double savedTime = T;
     std::size_t savingStep = 1;
-    std::size_t stepToSave = 1;//(std::size_t) 1. / dt;
+    std::size_t stepToSave = 10;//(std::size_t) 1. / dt;
     const std::size_t xSize = index.size();
     const std::size_t ySize = index[0].size();
 
@@ -658,10 +658,10 @@ int calculateEverything(
         inifluidVolumeOut,
         inifluidVolumeIn
     );
-
+double maxOpen =0.;
     while(modelingTime >= T && meshIsNotExhausted){
 		// ai::printLine("1");
-		double maxOpen = wn*ai::max(opening);
+		 maxOpen = wn*ai::max(opening);
 
 		double maxSpeed = ai::max(velocities)>0. ? ai::max(velocities) : 1.;
 		// ai::printLine("2");
@@ -724,17 +724,17 @@ int calculateEverything(
         // ai::printVector(dWdt);
         fluids = 0.;
         cent = 0.;
-        for(size_t i = 0; i < dWdt.size(); ++i){
-            fluids += 2*dWdt[i]*dx*dy;
-        }
-        for(size_t k = 0 ; k < activeElements.size(); ++k){
-            if(activeElements[k][0] == 0){
-                const size_t i = activeElements[k][0];
-                const size_t j = activeElements[k][1];
-                cent += dWdt[index[i][j]]*dx*dy;
-            }
-        }
-        fluids-=cent;
+        // for(size_t i = 0; i < dWdt.size(); ++i){
+        //     fluids += 2*dWdt[i]*dx*dy;
+        // }
+        // for(size_t k = 0 ; k < activeElements.size(); ++k){
+        //     if(activeElements[k][0] == 0){
+        //         const size_t i = activeElements[k][0];
+        //         const size_t j = activeElements[k][1];
+        //         cent += dWdt[index[i][j]]*dx*dy;
+        //     }
+        // }
+        // fluids-=cent;
 
         // std::cout<<"cent coloumn = "<<cent<<std::endl;
         // ai::printMatrix(activeElements);
@@ -778,12 +778,12 @@ int calculateEverything(
             }
 
             if(epsilon < maxDeltaDistance){
-                stepToCheck =1;
-                // std::round(
-                //     dx * (T - savedTime) / (20. * dt * maxDeltaDistance)
-                // );
+                stepToCheck =
+                std::round(
+                    dx * (T - savedTime) / (20. * dt * maxDeltaDistance)
+                );
             }else{
-                stepToCheck = 1;//2000;
+                stepToCheck = 2000;
             }
         }else{
             calculateFrontVelocity(
@@ -811,23 +811,14 @@ int calculateEverything(
         auto time3 = ai::time();
         #endif
         // double dWdtdif = 0.;
-
+        // std::cout<<"opening size = "<<opening.size()<<std::endl;
         for(std::size_t i = 0; i < opening.size(); ++i){
             concentration[i] = ai::max(
                 concentration[i] * opening[i] + dCdt[i] * dt,
                 0.
             );
-
-            // const size_t l = activeElements[i][0];
-            // const size_t m = activeElements[i][1];
-            //
-            // if(opening[i] + dWdt[i] * dt < 0.){
-            //
-            // }else{
-                opening[i] = opening[i] + dWdt[i] * dt;
-            // }
-            // opening[i] = ai::max(opening[i] + dWdt[i] * dt, 0.);
-
+                opening[i] += dWdt[i] * dt;
+                // opening[i] = ai::max(opening[i] + dWdt[i] * dt, 0.);
             if(epsilon < opening[i]){
                 concentration[i] /= opening[i];
             }else{
@@ -844,7 +835,7 @@ int calculateEverything(
                 concentration[i] = 0.585 - epsilon;
             }
         }
-
+        // std::cout<<"xSize = "<<xSize<<" ySize = "<<ySize<<std::endl;
         #if defined(DEBUG) && !defined(BUILD_DLL)
         if(std::isnan(opening[index[i00][j00]])){
             ai::printLine(
@@ -874,7 +865,7 @@ int calculateEverything(
 
 
 
-        if(1/*step >= stepToCheck */){
+        if(step >= stepToCheck ){
             if(runningFromGUI){
                 std::cout << "Progress: " << (T - T0) / (modelingTime - T0)
                     << std::endl;
@@ -885,7 +876,7 @@ int calculateEverything(
             step = 0;
 
             if(0 != regime){
-                stepToCheck = 1;//std::round(dx / (20. * dt * ai::max(velocities)) );
+                stepToCheck = std::round(dx / (20. * dt * ai::max(velocities)) );
 
          }
 
@@ -976,19 +967,19 @@ int calculateEverything(
             double fluidVolumeOut = 0.;
             double fluidVolumeIn = 0.;
 
-            calculateEfficiency(
-                fluidEfficiency,
-                proppantEfficiency,
-                injection,
-                opening,
-                wn,
-                concentration,
-                index,
-                T,
-                T0,
-                fluidVolumeOut,
-                fluidVolumeIn
-            );
+            // calculateEfficiency(
+            //     fluidEfficiency,
+            //     proppantEfficiency,
+            //     injection,
+            //     opening,
+            //     wn,
+            //     concentration,
+            //     index,
+            //     T,
+            //     T0,
+            //     fluidVolumeOut,
+            //     fluidVolumeIn
+            // );
 
             //std::cout<<"fluidEfficiency = "<<fluidEfficiency<<std::endl;
 
@@ -1011,7 +1002,7 @@ int calculateEverything(
                     fluids*dt*wn,//[10]
                     suminjection, //[11]
                     sumderivatives, //[12]
-                    fluidVolumeOut - inifluidVolumeOut+0.000580187,//[13]
+                    fluidVolumeOut - inifluidVolumeOut,//[13]
                     fluidVolumeIn - inifluidVolumeIn//[14]
                 }
             );
@@ -1653,25 +1644,58 @@ int planar3D(
                 zP,
                 openingAtTheStart
             );
-			 open[i][j] = wn*opening[index[i][j]];
+			 open[i][j] = opening[index[i][j]];
         }
     }
+
+
+    for(size_t i = 0; i < xSize; ++i){
+        for(size_t j = 0; j < ySize; ++j){
+            index[i][j] = i * ySize + j;
+            if(i==0){
+                volumeauto +=opening[index[i][j]];
+            }
+            else{
+
+                volumeauto +=2.*opening[index[i][j]];
+            }
+        }
+    }
+    volumeauto*=dx*dy;
+
+
+    std::cout<<"Volume auto = "<<volumeauto<<std::endl;
+    std::cout<<"Volume injected = "<<injection[0][2]*T0<<std::endl;
+	ai::saveMatrix("open", open, "", true);
+
+    //Коррекция автомодельного решения
+    // double volumeDiff = injection[0][2]*T0 - volumeauto;
+    double effi = injection[0][2]*T0/volumeauto;
+    std::cout<<"effi = "<<effi<<std::endl;
+
+    for(size_t i = 0 ; i < xSize; ++i){
+        for(size_t j = 0; j < ySize; ++j){
+            opening[index[i][j]]*=effi;
+        }
+    }
+    volumeauto = 0.;
+
     for(size_t i = 0; i < xSize; ++i){
         for(size_t j = 0; j < ySize; ++j){
             index[i][j] = i * ySize + j;
             if(i==0){
                 // if(opening[index[i][j]]>epsilon)
                 // std::cout<<"opening = "<<opening[index[i][j]]*wn<<std::endl;
-                volumeauto +=opening[index[i][j]]*wn;
+                volumeauto +=opening[index[i][j]];
             }
             else{
-                volumeauto +=2.*opening[index[i][j]]*wn;
+                volumeauto +=2.*opening[index[i][j]];
             }
         }
     }
-    volumeauto*=dx*dx;
-    std::cout<<"Volume auto = "<<volumeauto<<std::endl;
-	ai::saveMatrix("open", open, "", true);
+    volumeauto*=dx*dy;
+
+    std::cout<<"New automod volume = "<<volumeauto<<std::endl;
     std::cout << std::endl;
     std::cout << "Building influence matrix... ";
 
