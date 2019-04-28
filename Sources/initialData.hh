@@ -1,7 +1,7 @@
 #pragma once
 
 #include "planar3D.hh"
-
+#include "nlohmann/json.hpp"
 /*!
  \brief Нахождение начального раскрытия
 */
@@ -14,7 +14,7 @@ double getInitialOpening(
 );
 
 /*!
- \brief Загрузка начальных данных (пласт, план закачки) 
+ \brief Загрузка начальных данных (пласт, план закачки)
 */
 bool setInitialData(
     const std::string pathToLayersFile,

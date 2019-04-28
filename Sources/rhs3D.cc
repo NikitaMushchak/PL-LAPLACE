@@ -251,16 +251,6 @@ void calculateOpeningAndConcentrationSpeeds(
                     1. - concentrationOnTheBorder / 0.6, // / maximumConcentration,
                     CPow
                 );
-                if(opening[ index[i+1][j] ] < epsilon &&
-                    opening[ index[i][j] ] > epsilon &&
-                     fluidFlowRight > 0.){
-                    fluidFlowRight = 0.;
-                }
-                if(opening[ index[i][j] ] < epsilon &&
-                opening[ index[i+1][j] ] > epsilon &&
-                 fluidFlowRight < 0.){
-                    fluidFlowRight = 0.;
-                }
 
             if(
                 openingOnTheBorder > epsilon
@@ -293,39 +283,40 @@ void calculateOpeningAndConcentrationSpeeds(
                     1. - concentrationOnTheBorder / 0.6,// / maximumConcentration,
                     CPow
                 );
+                //НИЗ трещины
+                //Сверху
+                if(opening[index[i][j+1]] < epsilon &&
+                 j - j00 < 0 &&
+                    // opening[index[i][j+1]] > epsilon &&
+                    fluidFlowBottom < 0.){ //>
+                    fluidFlowBottom = 0.;
+                    // std::cout<<"IN UP:"<<"i = "<<i<<" j = "<<j<<std::endl;
+                }
+                // //Снизу
+                // if(opening[index[i][j+1]] < epsilon &&
+                //     opening[index[i][j]] > epsilon &&
+                //      j + 1 - j00 > 0 &&
+                //     fluidFlowBottom > 0.){ //>
+                //     fluidFlowBottom = 0.;
+                //     // std::cout<<"IN DOWN:"<<"i = "<<i<<" j = "<<j<<std::endl;
+                // }
                 //Верх трещины
-                //Сверху (1)
-                if(opening[index[i][j]] < epsilon
-                    && j - j00 > 0 &&
-                    // opening[index[i][j+1]] > epsilon &&
-                    fluidFlowBottom < 0.){ //<
-                    fluidFlowBottom = 0.;
-                    // std::cout<<"IN UP:"<<"i = "<<i<<" j = "<<j<<std::endl;
-                }
-                //Снизу (2)
-                if(opening[index[i][j+1]] < epsilon &&
-                    opening[index[i][j]] > epsilon &&
-                     j + 1 - j00 > 0 &&
-                    fluidFlowBottom > 0.){
-                    fluidFlowBottom = 0.;
-                    // std::cout<<"IN DOWN:"<<"i = "<<i<<" j = "<<j<<std::endl;
-                }
-                //Низ трещины
-                //Сверху (3)
-                if(opening[index[i][j]] < epsilon && j - j00 < 0 &&
-                    // opening[index[i][j+1]] > epsilon &&
-                    fluidFlowBottom > 0.){ //>
-                    fluidFlowBottom = 0.;
-                    // std::cout<<"IN UP:"<<"i = "<<i<<" j = "<<j<<std::endl;
-                }
-                //Снизу (4)
-                if(opening[index[i][j+1]] < epsilon &&
-                    // opening[index[i][j]] > epsilon &&
-                    j + 1 - j00 < 0 &&
-                    fluidFlowBottom < 0.){
-                    fluidFlowBottom = 0.;
-                    // std::cout<<"IN DOWN:"<<"i = "<<i<<" j = "<<j<<std::endl;
-                }
+                //Сверху
+                // if(opening[index[i][j]] < epsilon && j - j00 > 0 &&
+                //     opening[index[i][j+1]] > epsilon &&
+                //     fluidFlowBottom < 0.){ //>
+                //     fluidFlowBottom = 0.;
+                //     // std::cout<<"IN UP:"<<"i = "<<i<<" j = "<<j<<std::endl;
+                // }
+                // // //Снизу
+                // if(opening[index[i][j+1]] < epsilon &&
+                //     opening[index[i][j]] > epsilon &&
+                //     j + 1 - j00 > 0 &&
+                //     //i > 0 &&
+                //     fluidFlowBottom > 0.){
+                //     fluidFlowBottom = 0.;
+                //     // std::cout<<"IN DOWN:"<<"i = "<<i<<" j = "<<j<<std::endl;
+                // }
             if(
                 true
             ){
@@ -357,6 +348,72 @@ void calculateOpeningAndConcentrationSpeeds(
                 }
             }
         }
+        //
+        // // std::cout<<"i00 = "<<i00<<std::endl;
+        // if( opening[index[i][j]] < 0.){
+        //     std::cout<<std::setprecision(6)<<"\ni = "<<i<<" j = "<<j<<
+        //         " opening[index[i][j]] = "<<opening[index[i][j]]<<
+        //         " opening[index[i+1][j]] = "<<opening[index[i+1][j]]<<
+        //         " opening[index[i][j+1]] = "<<opening[index[i][j+1]]<<
+        //         " fluidFlowRight = "<<fluidFlowRight<<" fluidFlowBottom = "<<
+        //         fluidFlowBottom<<std::endl;
+        // }
+        if(opening[ index[i+1][j] ] < epsilon &&
+            opening[ index[i][j] ] > epsilon &&
+             fluidFlowRight > 0.){
+            fluidFlowRight = 0.;
+        }
+
+        if(opening[ index[i][j] ] < epsilon &&
+            opening[ index[i+1][j] ] > epsilon &&
+            fluidFlowRight < 0.){
+            fluidFlowRight = 0.;
+        }
+
+
+
+
+        if(opening[index[i][j]] < epsilon &&
+                j - j00 < 0 &&
+            opening[index[i][j+1]] > epsilon &&
+            fluidFlowBottom > 0.){ //>
+            fluidFlowBottom = 0.;
+            // std::cout<<"IN UP:"<<"i = "<<i<<" j = "<<j<<std::endl;
+        }
+
+        if(opening[index[i][j+1]] < epsilon &&
+            j + 1 - j00 < 0 &&
+            opening[index[i][j]] > epsilon &&
+            fluidFlowBottom < 0.){ //>
+            fluidFlowBottom = 0.;
+            // std::cout<<"IN UP:"<<"i = "<<i<<" j = "<<j<<std::endl;
+        }
+
+
+        if(opening[index[i][j]] < epsilon &&
+            j - j00 > 0 &&
+            opening[index[i][j+1]] > epsilon &&
+            fluidFlowBottom < 0.){ //>
+            fluidFlowBottom = 0.;
+            // std::cout<<"IN UP:"<<"i = "<<i<<" j = "<<j<<std::endl;
+        }
+
+        if(opening[index[i][j+1]] < epsilon &&
+         j + 1 - j00 > 0 &&
+            opening[index[i][j]] > epsilon &&
+            fluidFlowBottom > 0.){ //<
+            fluidFlowBottom = 0.;
+            // std::cout<<"IN UP:"<<"i = "<<i<<" j = "<<j<<std::endl;
+        }
+        // if( i==18 && opening[index[i][j+1]] < 0.){
+        //     std::cout<<std::setprecision(6)<<"\ni = "<<i<<" j = "<<j<<
+        //         " opening[index[i][j]] = "<<opening[index[i][j]]<<
+        //         " opening[index[i+1][j]] = "<<opening[index[i+1][j]]<<
+        //         " opening[index[i][j+1]] = "<<opening[index[i][j+1]]<<
+        //         " fluidFlowRight = "<<fluidFlowRight<<" fluidFlowBottom = "<<
+        //         fluidFlowBottom<<std::endl;
+        // }
+        
         dWdt[index[i][j]] += (fluidFlowRight + fluidFlowBottom) / dx
             - leakOff[j] / std::sqrt(currentTime - activationTime[k]);
         dWdt[index[i + 1][j]] -= fluidFlowRight / dx;

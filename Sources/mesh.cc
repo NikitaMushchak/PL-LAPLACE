@@ -35,7 +35,7 @@ int completeMesh(
     bool considerElasticModulusContrast,
     std::vector< std::vector<double> > &influenceMatrix
 ){
-    
+
     if(meshSize < x.size()){
         return 0;
     }
@@ -55,14 +55,14 @@ int completeMesh(
 
     std::size_t oldXSize = xSize;
     std::size_t oldYSize = ySize;
-    
+
     xSize = x.size();
     ySize = y.size();
     i00 = 0;
     j00 = floor(0.5 * ySize);
-    
+
     std::size_t maxIndex = 0;
-    
+
     for(std::size_t i = 0; i < index.size(); ++i){
         for(std::size_t j = 0; j < index[0].size(); ++j){
             if(index[i][j] > maxIndex){
@@ -91,12 +91,12 @@ int completeMesh(
         }
         for(l = 0; l < (ySize - oldYSize) / 2; ++l){
             index[i].insert(index[i].begin() + l, maxIndex + k);
-            
+
             ++k;
         }
         for(l += oldYSize; l < ySize; ++l){
             index[i].push_back(maxIndex + k);
-            
+
             ++k;
         }
     }
@@ -110,7 +110,7 @@ int completeMesh(
             distances[i][j] = 0.;
             index[i][j] = maxIndex + k;
             elementIsActive[i][j] = false;
-            
+
             ++k;
         }
     }
@@ -123,9 +123,9 @@ int completeMesh(
         influenceMatrix[i].resize(xSize * ySize);
     }
     buildInfluenceMatrix(influenceMatrix, xSize, ySize);
-    
+
     ai::printMatrix(index);
-    
+
     opening.resize(xSize * ySize);
     pressure.resize(xSize * ySize);
     concentration.resize(xSize * ySize);
@@ -137,7 +137,7 @@ int completeMesh(
         concentration[i] = 0.;
         activationTime[i] = 0.;
     }
-    
+
     if(!recalculateStressContrast(layers, stress, y)){
         return 31;
     }
@@ -153,12 +153,12 @@ int completeMesh(
         return 31;
     }
 
-    if(!recalculateLeakOffContrast(layers, leakOff, y)){
-        return 31;
-    }
-    if(!recalculateToughnessContrast(layers, toughness, y)){
-        return 31;
-    }
+    // if(!recalculateLeakOffContrast(layers, leakOff, y)){
+    //     return 31;
+    // }
+    // if(!recalculateToughnessContrast(layers, toughness, y)){
+    //     return 31;
+    // }
 
     // Масштабируем выличины (продолжение)
 
@@ -179,7 +179,7 @@ int completeMesh(
         ai::string("Completing mesh... Added ")
         + ai::string(k - 1) + ai::string(" new cells.")
     );
-    
+
     return 0;
 }
 
@@ -527,9 +527,9 @@ int scaleMesh(
     if(!recalculateLeakOffContrast(layers, leakOff, y)){
         return 31;
     }
-    if(!recalculateToughnessContrast(layers, toughness, y)){
-        return 31;
-    }
+    // if(!recalculateToughnessContrast(layers, toughness, y)){
+    //     return 31;
+    // }
 
     // Масштабируем выличины (продолжение)
 
