@@ -1,5 +1,4 @@
 #include <vector>
-#include <iostream>
 
 /*!
  \details Функция подставляет подходящее автомодельное решения для 
@@ -17,8 +16,7 @@ void setModelSolution(
     std::vector< std::vector<double> > &modelSolution
 ){
     if(0.6 < n){
-		std::cout<<"0.6"<<std::endl;
-		radius = 0.6975754;
+        radius = 0.6975754;
         modelSolution = std::vector< std::vector<double> >{
             {0.000000000000000, 1.190620000000000, 0.000000000000000, 1.117625000000000},
         {0.005000000000000, 1.191906000000000, 38.28378000000000, 1.117625000000000},
@@ -226,7 +224,6 @@ void setModelSolution(
         return;
    }
     if(0.4 < n){
-		std::cout<<"0.4"<<std::endl;
         radius = 0.7162;
         modelSolution = std::vector< std::vector<double> >{
             {0.000000000000000, 1.188874811200000, 0.000000000000000, 0.974883500000000},
@@ -435,7 +432,6 @@ void setModelSolution(
         return;
    }
     if(0.2 < n){
-		std::cout<<"0.2"<<std::endl;
         radius = 0.7236;
         modelSolution = std::vector< std::vector<double> >{
             {0.000000000000000, 1.196502991200000, 0.000000000000000, 0.948188200000000},
@@ -643,7 +639,7 @@ void setModelSolution(
 
         return;
    }
-	std::cout<<"0"<<std::endl;
+
     radius = 0.7296;
     modelSolution = std::vector< std::vector<double> >{
         {0.000000000000000, 1.212132633600000, 0.000000000000000, 0.941790600000000},

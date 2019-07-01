@@ -1,7 +1,9 @@
 #pragma once
 
 #include "planar3D.hh"
+
 #include "nlohmann/json.hpp"
+
 /*!
  \brief Нахождение начального раскрытия
 */
@@ -14,13 +16,16 @@ double getInitialOpening(
 );
 
 /*!
- \brief Загрузка начальных данных (пласт, план закачки)
+ \brief Загрузка начальных данных (пласт, план закачки) 
 */
 bool setInitialData(
     const std::string pathToLayersFile,
     std::vector< std::vector<double> > &layers,
     const std::string pathToInjectionFile,
-    std::vector< std::vector<double> > &injection
+    std::vector< std::vector<double> > &injection,
+    const std::string pathToFluidsFile = std::string(),
+    const std::string pathToProppantsFile = std::string(),
+    const bool multiFileFormat = false
 );
 
 /*!
@@ -74,6 +79,15 @@ bool recalculateElasticModulusContrast(
 bool recalculateLeakOffContrast(
     const std::vector< std::vector<double> > &layers,
     std::vector<double> &leakOff,
+    const std::vector<double> &y
+);
+
+/*!
+ \brief Пересчет контраста трещиностойкости
+*/
+bool recalculateToughnessContrast(
+    const std::vector< std::vector<double> > &layers,
+    std::vector<double> &toughness,
     const std::vector<double> &y
 );
 

@@ -1,6 +1,12 @@
 #include "ailibrary/ai.hh"
 #include "planar3D.hh"
 
+#if defined(USE_EIGEN)
+    #include "eigen/Dense"
+    #include "eigen/Sparse"
+    #include "eigen/Core"
+#endif
+
 /*!
  \details Функция заполняет матрицу коэффициентами влияния с учётом 
 симметрии вдоль одного из орт
@@ -94,35 +100,56 @@ void buildInfluenceMatrix(
  (только между активными элементами)
  \param[in] index - 
 */
- void buildPartialInfluenceMatrix(
+void buildPartialInfluenceMatrix(
     std::vector< std::vector<double> > &influenceMatrix,
     std::vector< std::vector<size_t> > &activeElements,
     std::vector<double> &opening,
+    #if defined(USE_EIGEN)
+    Eigen::VectorXd &partialOpening,
+    Eigen::MatrixXd &partialInfluenceMatrix,
+    #else
     std::vector<double> &partialOpening,
     std::vector< std::vector<double> > &partialInfluenceMatrix,
+    #endif
     std::vector< std::vector<size_t> > &index
 ){
+    #if defined(USE_EIGEN)
+    partialOpening.resize(activeElements.size());
+    partialOpening.setZero();
+    partialInfluenceMatrix.resize(activeElements.size(), activeElements.size());
+    partialInfluenceMatrix.setZero();
+    #else
     std::vector<double> zeroVector(activeElements.size(), 0);
-
     partialOpening = zeroVector;
-
     partialInfluenceMatrix.resize(activeElements.size());
-    std::fill(partialInfluenceMatrix.begin(), partialInfluenceMatrix.end(),
-        zeroVector);
+    std::fill(
+        partialInfluenceMatrix.begin(),
+        partialInfluenceMatrix.end(),
+        zeroVector
+    );
+    #endif
 
     for(size_t j = 0; j < activeElements.size(); ++j){
         const size_t ai = activeElements[j][0];
         const size_t aj = activeElements[j][1];
         const size_t pc1 = index[ai][aj];
         
+        #if defined(USE_EIGEN)
+        partialOpening(j) = opening[pc1];
+        #else
         partialOpening[j] = opening[pc1];
+        #endif
         
         for(size_t i = 0; i < activeElements.size(); ++i){
             const size_t ai2 = activeElements[i][0];
             const size_t aj2 = activeElements[i][1];
             const size_t pc2 = index[ai2][aj2];
             
+            #if defined(USE_EIGEN)
+            partialInfluenceMatrix(i, j) = influenceMatrix[pc2][pc1];
+            #else
             partialInfluenceMatrix[i][j] = influenceMatrix[pc2][pc1];
+            #endif
         }
     }
 }

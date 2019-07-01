@@ -1,9 +1,17 @@
-#ifdef OPENMP
+#include "markers.hh"
+#include "planar3D.hh"
+
+#if defined(OPENMP)
     #include <omp.h>
 #endif
 
+#if defined(USE_EIGEN)
+    #include "eigen/Dense"
+    #include "eigen/Sparse"
+    #include "eigen/Core"
+#endif
+
 #include "ailibrary/ai.hh"
-#include "planar3D.hh"
 
 /*!
  \details Функция умножает матрицу на вектор и возвращает результат по ссылке
@@ -12,6 +20,23 @@
  \param[in] vector - исходный вектор (N)
  \param[out] result - результирующий вектор (N)
 */
+#if defined(USE_EIGEN)
+inline void multiply(
+    Eigen::MatrixXd &matrix,
+    Eigen::VectorXd &vector,
+    std::vector<double> &result
+){
+    int size = (int) vector.size();
+
+    result.resize(size);
+
+    // Eigen::initParallel();
+
+    Eigen::VectorXd a = matrix * vector;
+
+    Eigen::VectorXd::Map(&result[0], size) = a;
+}
+#else
 inline void multiply(
     std::vector< std::vector<double> > &matrix,
     std::vector<double> &vector,
@@ -49,7 +74,7 @@ inline void multiply(
         }
     }
 }
-
+#endif
 
 
 /*!
@@ -67,8 +92,13 @@ void calculatePressure(
     std::vector<double> &pressure,
     std::vector< std::vector<std::size_t> > &index,
     std::vector< std::vector<std::size_t> > &activeElements,
+    #if defined(USE_EIGEN)
+    Eigen::MatrixXd &influenceMatrix,
+    Eigen::VectorXd &opening,
+    #else
     std::vector< std::vector<double> > &influenceMatrix,
     std::vector<double> &opening,
+    #endif
     std::vector<double> &stress
 ){
     std::fill(pressure.begin(), pressure.end(), 0.);
@@ -120,7 +150,7 @@ void calculateFrontVelocity(
             if(epsilon <= distance){
                 velocities[iRibbon][jRibbon] =
                     std::pow(opening[index[iRibbon][jRibbon]]
-                        / (Amu * std::pow(distance, alpha)), D3);///////////////////////////
+                        / (Amu * std::pow(distance, alpha)), D3);
             }else{
                 velocities[iRibbon][jRibbon] = 0.;
             }
@@ -130,8 +160,7 @@ void calculateFrontVelocity(
             //leak-off dominated regime
             const double alphaL = (n + 4.) / (4. * n + 4.);
             const double D3 = 3. / (1. - alphaL);
-
-
+            alpha = 2. / (n + 2.);
             double BAlpha = 0.25 * alphaL * tan(0.5 * M_PI - M_PI * (1 - alphaL));
             double Ainf = std::pow(BAlpha * (1 - alphaL), -0.5 * alphaL);
             Ainf = std::pow(Ainf, (1. + 2. * alphaL) / 3.);
@@ -161,7 +190,7 @@ void calculateFrontVelocity(
  жидкости в пласт
 
  \param[in] dWdt - вектор скоростей изменения раскрытия
- \param[in] dCdt - вектор скоростей изменения концетрации проппанта
+ \param[in] dCdt - вектор скоростей изменения раскрытия
  \param[in] opening - вектор раскрытий
  \param[in] concentration - вектор концентраций пропанта
  \param[in] pressure - вектор давлений
@@ -170,10 +199,13 @@ void calculateFrontVelocity(
  \param[in] activeElements - вектор активных элементов.
  \param[in] elementIsActive - матрица активных элементов
  \param[in] activationTime - время активации элемента
- \param[in] currentTime - текущее расчетное время
  \param[in] fluidDensity - плотность жидкости
  \param[in] proppantDensity - плотность пропанта
+ \param[in] proppantDiameter - диаметр проппанта
+ \param[in] maximumConcentration - максимальная концентрация проппанта
+ \param[in] currentTime - текущее расчетное время
  \param[in] n - индекс реологии жидкости
+ \param[in] wn - нормирующий множитель
 */
 void calculateOpeningAndConcentrationSpeeds(
     std::vector<double> &dWdt,
@@ -186,11 +218,15 @@ void calculateOpeningAndConcentrationSpeeds(
     std::vector< std::vector<size_t> > &activeElements,
     std::vector< std::vector<bool> > &elementIsActive,
     std::vector<double> &activationTime,
-    double currentTime,
     double fluidDensity,
     double proppantDensity,
-    double n
+    double proppantDiameter,
+    double maximumConcentration,
+    double currentTime,
+    double n,
+    double wn
 ){
+    // ai::printMarker(109090);
     dWdt.resize(opening.size());
     std::fill(dWdt.begin(), dWdt.end(), 0.);
 
@@ -199,21 +235,11 @@ void calculateOpeningAndConcentrationSpeeds(
 
     const double WPow = (2. * n + 1.) / n;
     const double PPow = 1. / n;
-
-    /// Параметры модели распространения пропанта
-
-    const double maximumConcentration = 0.585;
-    const double CPow = -2.5;
-
-    /// Диаметр пропанта
-
-    const double proppantDiameter = 2. * std::pow(10., -3);
+    const double CPow = -1.89;
 
     /// Скорость оседания
 
-    const double settlingVelocity = 476.7 * 9.81
-        * (proppantDensity - fluidDensity)
-        * std::pow(proppantDiameter, n + 1.) / (18. * std::pow(3., n - 1.));
+    double settlingVelocity;
 
     double fluidFlowRight;
     double fluidFlowBottom;
@@ -224,7 +250,7 @@ void calculateOpeningAndConcentrationSpeeds(
     double pressureDrop;
     double openingOnTheBorder;
     double concentrationOnTheBorder;
-
+    // ai::printMarker();
     for(std::size_t k = 0; k < activeElements.size(); ++k){
         const size_t i = activeElements[k][0];
         const size_t j = activeElements[k][1];
@@ -248,12 +274,24 @@ void calculateOpeningAndConcentrationSpeeds(
                 * std::pow(openingOnTheBorder, WPow)
                 * std::pow(std::abs(pressureDrop) / dx, PPow)
                 / std::pow(
-                    1. - concentrationOnTheBorder / 0.6, // / maximumConcentration,
+                    1. - std::min(concentrationOnTheBorder, maximumConcentration) / maximumConcentration, // / maximumConcentration,
                     CPow
                 );
+            //
+            // if (opening[index[i + 1][j]] < epsilon &&
+            //     opening[index[i][j]] > epsilon &&
+            //     fluidFlowRight > 0.) {
+            //     fluidFlowRight = 0.;
+            // }
+            //
+            // if (opening[index[i][j]] < epsilon &&
+            //     opening[index[i + 1][j]] > epsilon &&
+            //     fluidFlowRight < 0.) {
+            //     fluidFlowRight = 0.;
+            // }
 
             if(
-                openingOnTheBorder > epsilon
+                openingOnTheBorder * wn > proppantDiameter
                 && !(
                     (concentration[index[i][j]] >= maximumConcentration && pressureDrop > 0)
                     || (concentration[index[i + 1][j]] >= maximumConcentration && pressureDrop < 0)
@@ -280,48 +318,48 @@ void calculateOpeningAndConcentrationSpeeds(
                 * std::pow(openingOnTheBorder, WPow)
                 * std::pow(std::abs(pressureDrop) / dy, PPow)
                 / std::pow(
-                    1. - concentrationOnTheBorder / 0.6,// / maximumConcentration,
+                    1. - std::min(concentrationOnTheBorder, maximumConcentration) / maximumConcentration,// / maximumConcentration,
                     CPow
                 );
-                //НИЗ трещины
-                //Сверху
-                if(opening[index[i][j+1]] < epsilon &&
-                 j - j00 < 0 &&
-                    // opening[index[i][j+1]] > epsilon &&
-                    fluidFlowBottom < 0.){ //>
-                    fluidFlowBottom = 0.;
-                    // std::cout<<"IN UP:"<<"i = "<<i<<" j = "<<j<<std::endl;
-                }
-                // //Снизу
-                // if(opening[index[i][j+1]] < epsilon &&
-                //     opening[index[i][j]] > epsilon &&
-                //      j + 1 - j00 > 0 &&
-                //     fluidFlowBottom > 0.){ //>
-                //     fluidFlowBottom = 0.;
-                //     // std::cout<<"IN DOWN:"<<"i = "<<i<<" j = "<<j<<std::endl;
-                // }
-                //Верх трещины
-                //Сверху
-                // if(opening[index[i][j]] < epsilon && j - j00 > 0 &&
-                //     opening[index[i][j+1]] > epsilon &&
-                //     fluidFlowBottom < 0.){ //>
-                //     fluidFlowBottom = 0.;
-                //     // std::cout<<"IN UP:"<<"i = "<<i<<" j = "<<j<<std::endl;
-                // }
-                // // //Снизу
-                // if(opening[index[i][j+1]] < epsilon &&
-                //     opening[index[i][j]] > epsilon &&
-                //     j + 1 - j00 > 0 &&
-                //     //i > 0 &&
-                //     fluidFlowBottom > 0.){
-                //     fluidFlowBottom = 0.;
-                //     // std::cout<<"IN DOWN:"<<"i = "<<i<<" j = "<<j<<std::endl;
-                // }
+
+            // if (opening[index[i][j]] < epsilon &&
+            //     j - j00 < 0 &&
+            //     opening[index[i][j + 1]] > epsilon &&
+            //     fluidFlowBottom > 0.) { //>
+            //     fluidFlowBottom = 0.;
+            //
+            // }
+            //
+            // if (opening[index[i][j + 1]] < epsilon &&
+            //     j + 1 - j00 < 0 &&
+            //     opening[index[i][j]] > epsilon &&
+            //     fluidFlowBottom < 0.) { //
+            //     fluidFlowBottom = 0.;
+            //
+            // }
+            //
+            //
+            // if (opening[index[i][j]] < epsilon &&
+            //     j - j00 > 0 &&
+            //     opening[index[i][j + 1]] > epsilon &&
+            //     fluidFlowBottom < 0.) { //>
+            //     fluidFlowBottom = 0.;
+            //
+            // }
+            //
+            // if (opening[index[i][j + 1]] < epsilon &&
+            //     j + 1 - j00 > 0 &&
+            //     opening[index[i][j]] > epsilon &&
+            //     fluidFlowBottom > 0.) { //<
+            //     fluidFlowBottom = 0.;
+            //
+            // }
+
             if(
                 true
             ){
                 if(
-                    openingOnTheBorder > epsilon
+                    openingOnTheBorder * wn > proppantDiameter
                     && !(
                         (concentration[index[i][j]] >= maximumConcentration && pressureDrop > 0)
                         || (concentration[index[i][j + 1]] >= maximumConcentration && pressureDrop < 0)
@@ -330,90 +368,103 @@ void calculateOpeningAndConcentrationSpeeds(
                     proppantFlowBottom = fluidFlowBottom / openingOnTheBorder;
                 }
 
+                /*settlingVelocity = 476.7 * 9.81
+                    * (proppantDensity - fluidDensity)
+                    * std::pow(proppantDiameter, n + 1.) / (18. * std::pow(3., n - 1.));*/
 
-                settlingFlow = settlingVelocity * (
-                    1. - concentrationOnTheBorder / 0.6
+                settlingVelocity = 300. * proppantDiameter
+                    * std::pow(
+                        9.81 * (proppantDensity - fluidDensity)
+                        * proppantDiameter / 18.
+                        / std::pow(
+                            1. - std::min(concentrationOnTheBorder, maximumConcentration) / maximumConcentration,
+                            CPow
+                        ),
+                        1 / n
+                    );
+
+                settlingFlow = settlingVelocity * std::pow(
+                    1. - std::min(concentrationOnTheBorder, maximumConcentration) / maximumConcentration,
+                    5
                 );
 
-                if(0. < proppantFlowBottom){
+                if(0. < proppantFlowBottom + settlingFlow){
                     proppantFlowBottom *= concentration[index[i][j + 1]]
                         * opening[index[i][j + 1]];
                     settlingFlow *= concentration[index[i][j + 1]]
                         * opening[index[i][j + 1]];
-                }else{
+                }else {
                     proppantFlowBottom *= concentration[index[i][j]]
                         * opening[index[i][j]];
                     settlingFlow *= concentration[index[i][j]]
                         * opening[index[i][j]];
                 }
+
             }
         }
+
+        if(opening[index[i][j+1]] < 0.
+            && j - j00 < 0
+            && fluidFlowBottom < 0.){
+                    fluidFlowBottom = 0.;
+            }
+        if(opening[index[i][j]] < 0.
+                && j - j00 < 0
+                && fluidFlowBottom > 0.){
+                        fluidFlowBottom = 0.;
+            }
+        // if(opening[index[i][j]] < 0.
+        //     && j - j00 < 0
+        //     && fluidFlowBottom > 0.){
+        //             fluidFlowBottom = 0.;
+        //     }
+        // if(opening[index[i][j+1]] < 0.
+        //         && j - j00 < 0
+        //         && fluidFlowBottom < 0.){
+        //                 fluidFlowBottom = 0.;
+        //     }
         //
-        // // std::cout<<"i00 = "<<i00<<std::endl;
-        // if( opening[index[i][j]] < 0.){
-        //     std::cout<<std::setprecision(6)<<"\ni = "<<i<<" j = "<<j<<
-        //         " opening[index[i][j]] = "<<opening[index[i][j]]<<
-        //         " opening[index[i+1][j]] = "<<opening[index[i+1][j]]<<
-        //         " opening[index[i][j+1]] = "<<opening[index[i][j+1]]<<
-        //         " fluidFlowRight = "<<fluidFlowRight<<" fluidFlowBottom = "<<
-        //         fluidFlowBottom<<std::endl;
+        //
+        //
+        // if(opening[index[i+1][j]] < 0.
+        //     && fluidFlowRight > 0.){
+        //             fluidFlowRight = 0.;
+        //     }
+        //
+        // if(opening[index[i][j]] < 0.
+        //         && fluidFlowRight < 0.){
+        //                 fluidFlowRight = 0.;
         // }
-        if(opening[ index[i+1][j] ] < epsilon &&
-            opening[ index[i][j] ] > epsilon &&
-             fluidFlowRight > 0.){
-            fluidFlowRight = 0.;
+        if(i == 0 && j == 23){
+            std::cout<<"w = "<<opening[index[i][j]]<<std::endl;
+            std::cin.get();
         }
-
-        if(opening[ index[i][j] ] < epsilon &&
-            opening[ index[i+1][j] ] > epsilon &&
-            fluidFlowRight < 0.){
-            fluidFlowRight = 0.;
+        /**
+        if (opening[index[i][j]] < 0.){
+            std::cout<<std::setprecision(5)
+                     <<"\n opening[i][j] < 0."
+                     <<"\n j00 = "<<j00
+                     <<"\n i = "<<i<<" j = "<<j
+                     <<"\n opening[index[i][j]] = "<<opening[index[i][j]]
+                     <<"\n opening[index[i+1][j]] = "<<opening[index[i+1][j]]
+                     <<"\n opening[index[i][j+1]] = "<<opening[index[i][j+1]]
+                     <<"\n fluidFlowRight = "<<fluidFlowRight
+                     <<"\n fluidFlowBottom = "<<fluidFlowBottom<<std::endl;
+                     std::cin.get();
         }
-
-
-
-
-        if(opening[index[i][j]] < epsilon &&
-                j - j00 < 0 &&
-            opening[index[i][j+1]] > epsilon &&
-            fluidFlowBottom > 0.){ //>
-            fluidFlowBottom = 0.;
-            // std::cout<<"IN UP:"<<"i = "<<i<<" j = "<<j<<std::endl;
+        if (opening[index[i][j+1]] < 0.){
+            std::cout<<std::setprecision(5)
+                     <<"\n opening[i][j+1] < 0."
+                     <<"\n j00 = "<<j00
+                     <<"\n i = "<<i<<" j = "<<j
+                     <<"\n opening[index[i][j]] = "<<opening[index[i][j]]
+                     <<"\n opening[index[i+1][j]] = "<<opening[index[i+1][j]]
+                     <<"\n opening[index[i][j+1]] = "<<opening[index[i][j+1]]
+                     <<"\n fluidFlowRight = "<<fluidFlowRight
+                     <<"\n fluidFlowBottom = "<<fluidFlowBottom<<std::endl;
+                     std::cin.get();
         }
-
-        if(opening[index[i][j+1]] < epsilon &&
-            j + 1 - j00 < 0 &&
-            opening[index[i][j]] > epsilon &&
-            fluidFlowBottom < 0.){ //>
-            fluidFlowBottom = 0.;
-            // std::cout<<"IN UP:"<<"i = "<<i<<" j = "<<j<<std::endl;
-        }
-
-
-        if(opening[index[i][j]] < epsilon &&
-            j - j00 > 0 &&
-            opening[index[i][j+1]] > epsilon &&
-            fluidFlowBottom < 0.){ //>
-            fluidFlowBottom = 0.;
-            // std::cout<<"IN UP:"<<"i = "<<i<<" j = "<<j<<std::endl;
-        }
-
-        if(opening[index[i][j+1]] < epsilon &&
-         j + 1 - j00 > 0 &&
-            opening[index[i][j]] > epsilon &&
-            fluidFlowBottom > 0.){ //<
-            fluidFlowBottom = 0.;
-            // std::cout<<"IN UP:"<<"i = "<<i<<" j = "<<j<<std::endl;
-        }
-        // if( i==18 && opening[index[i][j+1]] < 0.){
-        //     std::cout<<std::setprecision(6)<<"\ni = "<<i<<" j = "<<j<<
-        //         " opening[index[i][j]] = "<<opening[index[i][j]]<<
-        //         " opening[index[i+1][j]] = "<<opening[index[i+1][j]]<<
-        //         " opening[index[i][j+1]] = "<<opening[index[i][j+1]]<<
-        //         " fluidFlowRight = "<<fluidFlowRight<<" fluidFlowBottom = "<<
-        //         fluidFlowBottom<<std::endl;
-        // }
-        
+        /**/
         dWdt[index[i][j]] += (fluidFlowRight + fluidFlowBottom) / dx
             - leakOff[j] / std::sqrt(currentTime - activationTime[k]);
         dWdt[index[i + 1][j]] -= fluidFlowRight / dx;
@@ -433,4 +484,479 @@ void calculateOpeningAndConcentrationSpeeds(
     dCdt[index[i00][j00]] += proppantInjection * fluidInjection
         / (proppantDensity * dx * dy);
         // * maximumConcentration / (proppantDensity * dx * dy);
+            // ai::printMarker();
+}
+
+
+/*!
+ \details Функция рассчитывает производную раскрытия по
+ времени с учетом давления и раскрытия в соседних элементах, а также утечки
+ жидкости в пласт и перенос проппанта маркерами
+
+ \param[in] dWdt - вектор скоростей изменения раскрытия
+ \param[in] opening - вектор раскрытий
+ \param[in] concentration - вектор концентраций проппанта
+ \param[in] pressure - вектор давлений
+ \param[in] leakOff - вектор коэффициентов Картера в разных слоях
+ \param[in] index - матрица индексов
+ \param[in] activeElements - вектор активных элементов.
+ \param[in] elementIsActive - матрица активных элементов
+ \param[in] markers - матрица положения маркеров
+ \param[in] activationTime - время активации элемента
+ \param[in] proppantDensity - вектор плотностей проппантов
+ \param[in] proppantDiameter - вектор диаметров проппантов
+ \param[in] maximumConcentration - вектор максимальных концентраций проппантов
+ \param[in] markerMass - вектор масс маркеров
+ \param[in] markerVolume - вектор объемов маркеров
+ \param[in] currentTime - текущее расчетное время
+ \param[in] fluidDensity - плотность жидкости
+ \param[in] n - индекс реологии жидкости
+ \param[in] wn - нормирующий множитель
+*/
+void calculateOpeningAndConcentrationSpeedsDP(
+    std::vector<double> &dWdt,
+    std::vector<double> &opening,
+    std::vector<double> &concentration,
+    std::vector<double> &pressure,
+    std::vector<double> &leakOff,
+    std::vector< std::vector<size_t> > &index,
+    std::vector< std::vector<size_t> > &activeElements,
+    std::vector< std::vector<bool> > &elementIsActive,
+    std::vector< std::vector<double> > &markers,
+    std::vector<double> &activationTime,
+    std::vector<double> &proppantDensity,
+    std::vector<double> &proppantDiameter,
+    std::vector<double> &maximumConcentration,
+    std::vector<double> &markerMass,
+    std::vector<double> &markerVolume,
+    double fluidDensity,
+    double currentTime,
+    double n,
+    double wn
+) {
+    // ai::printMarker(232323);
+    dWdt.resize(opening.size());
+    std::fill(dWdt.begin(), dWdt.end(), 0.);
+
+    const double WPow = (2. * n + 1.) / n;
+    const double PPow = 1. / n;
+    const double CPow = -2.5;
+
+    std::vector<double> settlingVelocity;
+    for (std::size_t i = 0; i < proppantDensity.size(); ++i) {
+        settlingVelocity.push_back(476.7 * 9.81 * (proppantDensity[i] - fluidDensity)
+            * std::pow(proppantDiameter[i], n + 1.) / (18. * std::pow(3., n - 1.)));
+    }
+
+    /// Лист маркеров для проппантов
+    std::vector< std::vector<size_t> > markersInCells;
+
+    if (markers.size() != 0) {
+        markersInCells.resize(opening.size());
+        generateListOfMarkersInCells(
+            markersInCells,
+            markers,
+            index
+        );
+    }
+
+    double fluidFlowRight;
+    double fluidFlowBottom;
+    double fluidVelocityRight;
+    double fluidVelocityBottom;
+    double pressureIJ;
+    double pressureDrop;
+    double openingOnTheBorder;
+    double concentrationOnTheBorder;
+
+
+    for (std::size_t k = 0; k < activeElements.size(); ++k) {
+        const size_t i = activeElements[k][0];
+        const size_t j = activeElements[k][1];
+
+        fluidFlowRight = 0.;
+        fluidFlowBottom = 0.;
+        fluidVelocityRight = 0.;
+        fluidVelocityBottom = 0.;
+
+        pressureIJ = pressure[index[i][j]];
+
+        /// Расчёт потоков и скоростей жидкости
+
+        if (elementIsActive[i + 1][j]) {
+            pressureDrop = pressure[index[i + 1][j]] - pressureIJ;
+            openingOnTheBorder = 0.5
+                * (opening[index[i][j]] + opening[index[i + 1][j]]);
+            concentrationOnTheBorder = 0.5
+                * (concentration[index[i][j]] + concentration[index[i + 1][j]]);
+            fluidFlowRight = ai::sign(pressureDrop)
+                * std::pow(openingOnTheBorder, WPow)
+                * std::pow(std::abs(pressureDrop) / dx, PPow)
+                / std::pow(
+                1. - std::min(concentrationOnTheBorder, 0.6) / 0.6, // / maximumConcentration,
+                CPow
+                );
+            fluidVelocityRight = fluidFlowRight / openingOnTheBorder;
+
+            //Контактные условия
+
+            if (opening[index[i + 1][j]] < 0. &&
+                opening[index[i][j]] > 0. &&
+                fluidFlowRight > 0.) {
+                fluidFlowRight = 0.;
+            }
+
+            if (opening[index[i][j]] < 0. &&
+                opening[index[i + 1][j]] > 0. &&
+                fluidFlowRight < 0.) {
+                fluidFlowRight = 0.;
+            }
+        }
+
+        if (elementIsActive[i][j + 1]) {
+            pressureDrop = pressure[index[i][j + 1]] - pressureIJ;
+            openingOnTheBorder = 0.5
+                * (opening[index[i][j]] + opening[index[i][j + 1]]);
+            concentrationOnTheBorder = 0.5
+                * (concentration[index[i][j]] + concentration[index[i][j + 1]]);
+            fluidFlowBottom = ai::sign(pressureDrop)
+                * std::pow(openingOnTheBorder, WPow)
+                * std::pow(std::abs(pressureDrop) / dy, PPow)
+                / std::pow(
+                1. - std::min(concentrationOnTheBorder, 0.6) / 0.6,// / maximumConcentration,
+                CPow
+                );
+            fluidVelocityBottom = fluidFlowBottom / openingOnTheBorder;
+
+            // Контактные условия
+
+            if (opening[index[i][j]] < 0. &&
+                j - j00 < 0 &&
+                opening[index[i][j + 1]] > 0. &&
+                fluidFlowBottom > 0.) { //>
+                fluidFlowBottom = 0.;
+
+            }
+
+            if (opening[index[i][j + 1]] < 0. &&
+                j + 1 - j00 < 0 &&
+                opening[index[i][j]] > 0. &&
+                fluidFlowBottom < 0.) { //
+                fluidFlowBottom = 0.;
+
+            }
+
+
+            if (opening[index[i][j]] < 0. &&
+                j - j00 > 0 &&
+                opening[index[i][j + 1]] > 0. &&
+                fluidFlowBottom < 0.) { //>
+                fluidFlowBottom = 0.;
+
+            }
+
+            if (opening[index[i][j + 1]] < 0. &&
+                j + 1 - j00 > 0 &&
+                opening[index[i][j]] > 0. &&
+                fluidFlowBottom > 0.) { //<
+                fluidFlowBottom = 0.;
+
+            }
+        }
+
+        dWdt[index[i][j]] += (fluidFlowRight + fluidFlowBottom) / dx
+            - leakOff[j] / std::sqrt(currentTime - activationTime[k]);
+        dWdt[index[i + 1][j]] -= fluidFlowRight / dx;
+        dWdt[index[i][j + 1]] -= fluidFlowBottom / dy;
+
+        if (i00 == i) {
+            dWdt[index[i][j]] += fluidFlowRight / dx;
+        }
+
+        /// Перенос маркеров для проппанта
+        if (markers.size() != 0) {
+            markersTransport(
+                markersInCells,
+                markers,
+                index,
+                elementIsActive,
+                opening,
+                pressure,
+                concentration,
+                proppantDensity,
+                proppantDiameter,
+                maximumConcentration,
+                markerVolume,
+                settlingVelocity,
+                WPow,
+                PPow,
+                CPow,
+                fluidVelocityRight,
+                fluidVelocityBottom,
+                pressureIJ,
+                wn,
+                i,
+                j,
+                currentTime
+            );
+
+        }
+    }
+
+    dWdt[index[i00][j00]] += fluidInjection / (dx * dy);
+}
+
+/*!
+ \details Функция рассчитывает производную раскрытия по
+ времени с учетом давления и раскрытия в соседних элементах, а также утечки
+ жидкости в пласт и перенос проппанта. Несколько жидкостей.
+
+ \param[in] dWdt - вектор скоростей изменения раскрытия
+ \param[in] dCdt - вектор скоростей изменения раскрытия
+ \param[in] opening - вектор раскрытий
+ \param[in] concentration - вектор концентраций проппанта
+ \param[in] pressure - вектор давлений
+ \param[in] leakOff - вектор коэффициентов Картера в разных слоях
+ \param[in] index - матрица индексов
+ \param[in] activeElements - вектор активных элементов.
+ \param[in] elementIsActive - матрица активных элементов
+ \param[in] markers - матрица положения маркеров
+ \param[in] activationTime - время активации элемента
+ \param[in] fluidViscosity - вектор вязкостей жидкостей
+ \param[in] rheologyIndex - вектор индексов течения жидкостей
+ \param[in] fluidDensity - вектор плотностей жидкостей
+ \param[in] proppantDensity - плотность проппанта
+ \param[in] proppantDiameter - диаметр проппанта
+ \param[in] maximumConcentration - максимальная концентрация проппанта
+ \param[in] markerVolume - объем маркера
+ \param[in] currentTime - текущее расчетное время
+ \param[in] n - индекс реологии жидкости
+ \param[in] wn - нормирующий множитель
+*/
+void calculateOpeningAndConcentrationSpeedsDF(
+    std::vector<double> &dWdt,
+    std::vector<double> &dCdt,
+    std::vector<double> &opening,
+    std::vector<double> &concentration,
+    std::vector<double> &pressure,
+    std::vector<double> &leakOff,
+    std::vector< std::vector<size_t> > &index,
+    std::vector< std::vector<size_t> > &activeElements,
+    std::vector< std::vector<bool> > &elementIsActive,
+    std::vector< std::vector<double> > &markers,
+    std::vector<double> &activationTime,
+    std::vector<double> &fluidViscosity,
+    std::vector<double> &rheologyIndex,
+    std::vector<double> &fluidDensity,
+    double proppantDensity,
+    double proppantDiameter,
+    double maximumConcentration,
+    double markerVolume,
+    double currentTime,
+    double n,
+    double wn
+) {
+    dWdt.resize(opening.size());
+    std::fill(dWdt.begin(), dWdt.end(), 0.);
+
+    dCdt.resize(concentration.size());
+    std::fill(dCdt.begin(), dCdt.end(), 0.);
+
+    const double WPow = (2. * n + 1.) / n;
+    const double PPow = 1. / n;
+    const double CPow = -2.5;
+
+    /// Лист маркеров для жидкостей
+    std::vector< std::vector<size_t> > markersInCells;
+
+    if (markers.size() != 0) {
+        markersInCells.resize(opening.size());
+        generateListOfMarkersInCells(
+            markersInCells,
+            markers,
+            index
+        );
+    }
+
+    double fluidFlowRight;
+    double fluidFlowBottom;
+    double fluidVelocityRight;
+    double fluidVelocityBottom;
+    double proppantFlowRight;
+    double proppantFlowBottom;
+    double settlingFlow;
+    double pressureIJ;
+    double pressureDrop;
+    double openingOnTheBorder;
+    double concentrationOnTheBorder;
+
+    double effectiveViscosity;
+    double effectiveN;
+    double effectiveDensity;
+
+    double settlingVelocity;
+
+    for (std::size_t k = 0; k < activeElements.size(); ++k) {
+        const size_t i = activeElements[k][0];
+        const size_t j = activeElements[k][1];
+
+        fluidFlowRight = 0.;
+        fluidFlowBottom = 0.;
+        fluidVelocityRight = 0.;
+        fluidVelocityBottom = 0.;
+        proppantFlowRight = 0.;
+        proppantFlowBottom = 0.;
+        settlingFlow = 0.;
+        pressureIJ = pressure[index[i][j]];
+
+        /// Расчет эффективной вязкости
+        calcEffectiveViscosity(
+            markersInCells,
+            index,
+            markers,
+            fluidViscosity,
+            rheologyIndex,
+            fluidDensity,
+            effectiveViscosity,
+            effectiveN,
+            effectiveDensity,
+            i,
+            j
+        );
+
+        /// Расчет скорости оседания
+        settlingVelocity = 476.7 * 9.81
+            * (proppantDensity - effectiveDensity)
+            * std::pow(proppantDiameter, n + 1.) / (18. * std::pow(3., n - 1.));
+
+        /// Расчёт потоков и скоростей жидкости
+
+        if (elementIsActive[i + 1][j]) {
+            pressureDrop = pressure[index[i + 1][j]] - pressureIJ;
+            openingOnTheBorder = 0.5
+                * (opening[index[i][j]] + opening[index[i + 1][j]]);
+            concentrationOnTheBorder = 0.5
+                * (concentration[index[i][j]] + concentration[index[i + 1][j]]);
+            fluidFlowRight = ai::sign(pressureDrop)
+                * std::pow(openingOnTheBorder, WPow)
+                * std::pow(std::abs(pressureDrop) / dx, PPow)
+                / std::pow(
+                    1. - std::min(concentrationOnTheBorder, 0.6) / 0.6, // / maximumConcentration,
+                    CPow
+                );
+            fluidVelocityRight = fluidFlowRight / openingOnTheBorder;
+            fluidFlowRight /= effectiveViscosity;
+
+            if (
+                openingOnTheBorder * wn > proppantDiameter
+                && !(
+                (concentration[index[i][j]] >= maximumConcentration && pressureDrop > 0)
+                    || (concentration[index[i + 1][j]] >= maximumConcentration && pressureDrop < 0)
+                    )
+                ) {
+                proppantFlowRight = fluidFlowRight / openingOnTheBorder;
+
+                if (0. < proppantFlowRight) {
+                    proppantFlowRight *= concentration[index[i + 1][j]]
+                        * opening[index[i + 1][j]];
+                }
+                else {
+                    proppantFlowRight *= concentration[index[i][j]]
+                        * opening[index[i][j]];
+                }
+            }
+        }
+
+        if (elementIsActive[i][j + 1]) {
+            pressureDrop = pressure[index[i][j + 1]] - pressureIJ;
+            openingOnTheBorder = 0.5
+                * (opening[index[i][j]] + opening[index[i][j + 1]]);
+            concentrationOnTheBorder = 0.5
+                * (concentration[index[i][j]] + concentration[index[i][j + 1]]);
+            fluidFlowBottom = ai::sign(pressureDrop)
+                * std::pow(openingOnTheBorder, WPow)
+                * std::pow(std::abs(pressureDrop) / dy, PPow)
+                / std::pow(
+                    1. - std::min(concentrationOnTheBorder, 0.6) / 0.6,// / maximumConcentration,
+                    CPow
+                );
+            fluidVelocityBottom = fluidFlowBottom / openingOnTheBorder;
+            fluidFlowBottom /= effectiveViscosity;
+            if (
+                true
+                ) {
+                if (
+                    openingOnTheBorder * wn> proppantDiameter
+                    && !(
+                    (concentration[index[i][j]] >= maximumConcentration && pressureDrop > 0)
+                        || (concentration[index[i][j + 1]] >= maximumConcentration && pressureDrop < 0)
+                        )
+                    ) {
+                    proppantFlowBottom = fluidFlowBottom / openingOnTheBorder;
+                }
+
+
+                settlingFlow = settlingVelocity * (
+                    1. - concentrationOnTheBorder / 0.6
+                    );
+
+                if (0. < proppantFlowBottom) {
+                    proppantFlowBottom *= concentration[index[i][j + 1]]
+                        * opening[index[i][j + 1]];
+                    settlingFlow *= concentration[index[i][j + 1]]
+                        * opening[index[i][j + 1]];
+                }
+                else {
+                    proppantFlowBottom *= concentration[index[i][j]]
+                        * opening[index[i][j]];
+                    settlingFlow *= concentration[index[i][j]]
+                        * opening[index[i][j]];
+                }
+            }
+        }
+
+        dWdt[index[i][j]] += (fluidFlowRight + fluidFlowBottom) / dx
+            - leakOff[j] / std::sqrt(currentTime - activationTime[k]);
+        dWdt[index[i + 1][j]] -= fluidFlowRight / dx;
+        dWdt[index[i][j + 1]] -= fluidFlowBottom / dy;
+
+        dCdt[index[i][j]] += (proppantFlowRight + proppantFlowBottom + settlingFlow) / dx;
+        dCdt[index[i + 1][j]] -= proppantFlowRight / dx;
+        dCdt[index[i][j + 1]] -= (proppantFlowBottom + settlingFlow) / dy;
+
+        if (i00 == i) {
+            dWdt[index[i][j]] += fluidFlowRight / dx;
+            dCdt[index[i][j]] += proppantFlowRight / dx;
+        }
+
+        /// Перенос маркеров для жидкости
+        if (markers.size() != 0) {
+            markersFluidTransport(
+                markersInCells,
+                markers,
+                index,
+                elementIsActive,
+                opening,
+                pressure,
+                concentration,
+                fluidViscosity,
+                WPow,
+                PPow,
+                CPow,
+                fluidVelocityRight,
+                fluidVelocityBottom,
+                pressureIJ,
+                wn,
+                markerVolume,
+                i,
+                j
+            );
+        }
+
+    }
+
+    dWdt[index[i00][j00]] += fluidInjection / (dx * dy);
+    dCdt[index[i00][j00]] += proppantInjection * fluidInjection
+        / (proppantDensity * dx * dy);
+    // * maximumConcentration / (proppantDensity * dx * dy);
 }

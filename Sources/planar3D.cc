@@ -1,10 +1,9 @@
 /*!
  \file planar3D.cc
- \brief
- \details
-файл с функцией planar3D - главной функцией расчета и вызова функций различных режимов
-Данный файл содержит в себе определения основных
-классов, используемых в демонстрационной программе
+ \brief файл с функцией planar3D - главной функцией расчета и вызова функций
+ различных режимов
+ \details Данный файл содержит в себе определения основных классов,
+ используемых в программе
 */
 
 #include <vector>
@@ -14,14 +13,35 @@
 #include "nlohmann/json.hpp"
 #include "ailibrary/ai.hh"
 
+ //#define BUILD_DLL
+
+#if defined(USE_EIGEN)
+    #include "eigen/Dense"
+    #include "eigen/Sparse"
+    #include "eigen/Core"
+#endif
 
 #include "io.hh"
+#include "mesh.hh"
 #include "rhs3D.hh"
 #include "ribbons.hh"
 #include "automodel.hh"
 #include "initialData.hh"
 #include "influenceMatrix.hh"
 #include "findActiveElements.hh"
+
+#if defined(IMEX)
+    #include "imex.hh"
+#endif
+
+#if defined(PROPPANT_MARKERS) || defined(FLUID_MARKERS)
+    #include "markers.hh"
+#endif
+
+#if defined(BUILD_DLL)
+    #include "api.h"
+    #include "api_callback.h"
+#endif
 
 #ifdef OPENMP
     #include <omp.h>
@@ -38,6 +58,10 @@
     void omp_set_num_threads(std::size_t numberOfThreads){};
 #endif
 
+#if defined(FLUID_MARKERS) && defined(PROPPANT_MARKERS)
+    #error Cannot use markers for both fluid and proppant!
+#endif
+
 int regime;
 
 double dx;
@@ -48,7 +72,6 @@ double fluidInjection;
 double proppantInjection;
 
 double E;
-double Kic;
 double alpha;
 double Amu;
 double epsilon;
@@ -74,14 +97,8 @@ std::string regimeName(){
 }
 
 /*!
- \details Функция проводит интерполяцию слоев на планаровскую сетку
- \return layers
-*/
-
-/*!
  \details Функция выводит текстовое лого программы
 */
-
 void printLogo(){
     std::cout << " ____  _                       _____ ____     ____ _     "
         << "___ " << std::endl;
@@ -98,442 +115,23 @@ void printLogo(){
 }
 
 
-/// \todo aaaaa
-int scaleMesh(
-    std::vector<double> &x,
-    std::vector<double> &y,
-    std::vector< std::vector<Cell> > &mesh,
-    const std::vector< std::vector<std::size_t> > &index,
-    std::vector< std::vector<std::size_t> > &activeElements,
-    std::vector< std::vector<bool> > &elementIsActive,
-    std::vector<double> &activationTime,
-    std::vector<Ribbon> &ribbons,
-    std::vector< std::vector<double> > &distances,
-    std::vector<double> &opening,
-    std::vector<double> &concentration,
-    const std::vector< std::vector<double> > &layers,
-    std::vector<double> &flatYoungsModulus,
-    std::vector<double> &stress,
-    std::vector<double> &leakOff,
-    const std::vector<double> &zeroVectorXY,
-    const std::vector< std::vector<double> > &zeroMatrixXY,
-    const std::size_t xSize,
-    const std::size_t ySize,
-    double &initialRadius,
-    double &axMax,
-    double &dMin1,
-    double &dCenter1,
-    double &dMax1,
-    double &dMin2,
-    double &dCenter2,
-    double &dx,
-    double &dy,
-    double &dt,
-    const double wn,
-    const double timeScale,
-    const double T,
-    const double T0,
-    double &E,
-    const bool considerElasticModulusContrast,
-    int &meshScalingCounter
-){
-    --meshScalingCounter;
-
-    ai::printLine(
-        ai::string("Doubling the mesh at time = ") + ai::string(T)
-    );
-
-    axMax *= 2.;
-    dx *= 2.;
-    dy = dx;
-    dt *= 1.2;
-
-    x.clear();
-    y.clear();
-    for(double i = 0; i <= axMax + epsilon; i += dx){
-        x.push_back(i);
-    }
-    for(double i = -axMax; i <= axMax + epsilon; i += dy){
-        y.push_back(i);
-    }
-
-    if(xSize != x.size() || ySize != y.size()){
-        std::cerr << "Cannot scale the mesh: wrong sizes"
-            << std::endl;
-
-        return 31;
-    }
-
-    for(size_t i = 0; i < xSize; ++i){
-        for(size_t j = 0; j < ySize; ++j){
-            mesh[i][j].setCoordinates(x[i], y[j]);
-        }
-    }
-    std::vector<double> openingNew = zeroVectorXY;
-    std::vector<double> concentrationNew = zeroVectorXY;
-    std::vector< std::vector<double> > activationTimeTable = zeroMatrixXY;
-    std::vector< std::vector<double> > distancesNew = zeroMatrixXY;
-
-    for(size_t i = 0; i < xSize; ++i){
-        for(size_t j = 0; j < ySize; ++j){
-            activationTimeTable[i][j] = T0 - 10. * dt;
-        }
-    }
-    for(std::size_t k = 0; k < activeElements.size(); ++k){
-        const std::size_t i = activeElements[k][0];
-        const std::size_t j = activeElements[k][1];
-
-        activationTimeTable[i][j] = activationTime[k];
-    }
-
-    ribbons.clear();
-    activeElements.clear();
-    activationTime.clear();
-    for(int j = 0; 2 * j < ySize - j00 - 1; ++j){
-        for(int i = 0; 2 * i < xSize - 1; ++i){
-            openingNew[index[i00 + i][j00 + j]] = opening[index[i00 + 2 * i][j00 + 2 * j]];
-            openingNew[index[i00 + i][j00 - j]] = opening[index[i00 + 2 * i][j00 - 2 * j]];
-            concentrationNew[index[i00 + i][j00 + j]] = concentration[index[i00 + 2 * i][j00 + 2 * j]];
-            concentrationNew[index[i00 + i][j00 - j]] = concentration[index[i00 + 2 * i][j00 - 2 * j]];
-
-            std::size_t k = i00 + 2 * i;
-            std::size_t l = j00 + 2 * j;
-            std::size_t m = j00 - 2 * j;
-
-            double distance = 10 * dMin2;
-
-            if(RIBBON == mesh[k][l].type){
-                if(distances[k][l] >= dMax1){
-                    distance = ai::min(distances[k][l], distance);
-                }
-            }
-
-            l += 1;
-
-            if(RIBBON == mesh[k][l].type){
-                if(distances[k][l] >= dMax1){
-                    distance = ai::min(distances[k][l] + dx, distance);
-                }
-            }
-
-            l -= 2;
-
-            if(RIBBON == mesh[k][l].type){
-                if(distances[k][l] >= dMax1){
-                    distance = ai::min(distances[k][l] + dx, distance);
-                }
-            }
-
-            l += 1;
-            k += 1;
-
-            if(RIBBON == mesh[k][l].type){
-                if(distances[k][l] >= dMax1){
-                    distance = ai::min(distances[k][l] + dx, distance);
-                }
-            }
-
-            l += 1;
-
-            if(RIBBON == mesh[k][l].type){
-                if(distances[k][l] >= dMax1){
-                    distance = ai::min(distances[k][l] + sqrt(2.) * dx, distance);
-                }
-            }
-
-            l -= 2;
-
-            if(RIBBON == mesh[k][l].type){
-                if(distances[k][l] >= dMax1){
-                    distance = ai::min(distances[k][l] + sqrt(2.) * dx, distance);
-                }
-            }
-
-            k -= 1;
-            l += 1;
-
-            if(i00 < k){
-                k -= 1;
-
-                if(RIBBON == mesh[k][l].type){
-                    if(distances[k][l] >= dMax1){
-                        distance = ai::min(distances[k][l] + dx, distance);
-                    }
-                }
-
-                l += 1;
-
-                if(RIBBON == mesh[k][l].type){
-                    if(distances[k][l] >= dMax1){
-                        distance = ai::min(distances[k][l] + sqrt(2.) * dx, distance);
-                    }
-                }
-
-                l -= 2;
-
-                if(RIBBON == mesh[k][l].type){
-                    if(distances[k][l] >= dMax1){
-                        distance = ai::min(distances[k][l] + sqrt(2.) * dx, distance);
-                    }
-                }
-
-                l += 1;
-                k += 1;
-            }
-
-            if(distance <= dMin2 && distance >= dMax1){
-                distancesNew[i00 + i][j00 + j] = distance;
-            }
-
-            distance = 10 * dMin2;
-
-            if(RIBBON == mesh[k][m].type){
-                if(distances[k][m] >= dMax1){
-                    distance = ai::min(distances[k][m], distance);
-                }
-            }
-
-            m += 1;
-
-            if(RIBBON == mesh[k][m].type){
-                if(distances[k][m] >= dMax1){
-                    distance = ai::min(distances[k][m] + dx, distance);
-                }
-            }
-
-            m -= 2;
-
-            if(RIBBON == mesh[k][m].type){
-                if(distances[k][m] >= dMax1){
-                    distance = ai::min(distances[k][m] + dx, distance);
-                }
-            }
-
-            m += 1;
-            k += 1;
-
-            if(RIBBON == mesh[k][m].type){
-                if(distances[k][m] >= dMax1){
-                    distance = ai::min(distances[k][m] + dx, distance);
-                }
-            }
-
-            m += 1;
-
-            if(RIBBON == mesh[k][m].type){
-                if(distances[k][m] >= dMax1){
-                    distance = ai::min(distances[k][m] + sqrt(2.) * dx, distance);
-                }
-            }
-
-            m -= 2;
-
-            if(RIBBON == mesh[k][m].type){
-                if(distances[k][m] >= dMax1){
-                    distance = ai::min(distances[k][m] + sqrt(2.) * dx, distance);
-                }
-            }
-
-            k -= 1;
-            m += 1;
-
-            if(i00 < k){
-                k -= 1;
-
-                if(RIBBON == mesh[k][m].type){
-                    if(distances[k][m] >= dMax1){
-                        distance = ai::min(distances[k][m] + dx, distance);
-                    }
-                }
-
-                m += 1;
-
-                if(RIBBON == mesh[k][m].type){
-                    if(distances[k][m] >= dMax1){
-                        distance = ai::min(distances[k][m] + sqrt(2.) * dx, distance);
-                    }
-                }
-
-                m -= 2;
-
-                if(RIBBON == mesh[k][m].type){
-                    if(distances[k][m] >= dMax1){
-                        distance = ai::min(distances[k][m] + sqrt(2.) * dx, distance);
-                    }
-                }
-
-                m += 1;
-                k += 1;
-            }
-
-            if(distance <= dMin2 && distance >= dMax1){
-                distancesNew[i00 + i][j00 - j] = distance;
-            }
-        }
-    }
-
-    for(size_t i = 0; i < xSize; ++i){
-        for(size_t j = 0; j < ySize; ++j){
-            elementIsActive[i][j] = false;
-            if(distancesNew[i][j] > epsilon){
-                ribbons.push_back(Ribbon(i, j));
-                mesh[i][j].type = RIBBON;
-            }else{
-                mesh[i][j].type = OUTSIDE;
-            }
-            if(epsilon < openingNew[index[i][j]] || RIBBON == mesh[i][j].type){
-                activeElements.push_back(std::vector<size_t>{i, j});
-                elementIsActive[i][j] = true;
-
-                if(T0 - 9. * dt < activationTimeTable[i][j]){
-                    activationTime.push_back(activationTimeTable[i][j]);
-                }else{
-                    activationTime.push_back(T);
-                }
-            }
-        }
-    }
-
-    activationTimeTable.clear();
-
-    std::cout << "Active elements: " << activeElements.size() << "."
-        << std::endl;
-
-
-    for(size_t k = 0; k < activeElements.size(); ++k){
-        const size_t i = activeElements[k][0];
-        const size_t j = activeElements[k][1];
-
-        if(
-            RIBBON != mesh[i][j].type
-            && (i00 == i || elementIsActive[i - 1][j])
-            && elementIsActive[i + 1][j]
-            && elementIsActive[i][j - 1]
-            && elementIsActive[i][j + 1]
-        ){
-            mesh[i][j].type = CHANNEL;
-        }
-    }
-    initialRadius *= 2;
-    std::cout << "Ribbons: " << ribbons.size() << "." << std::endl;
-
-    opening = openingNew;
-    distances = distancesNew;
-    concentration = concentrationNew;
-
-    if(!recalculateStressContrast(layers, stress, y)){
-        return 31;
-    }
-
-    if(!recalculateElasticModulusContrast(
-            layers,
-            E,
-            flatYoungsModulus,
-            y,
-            considerElasticModulusContrast
-        )
-    ){
-        return 31;
-    }
-
-    if(!recalculateLeakOffContrast(layers, leakOff, y)){
-        return 31;
-    }
-
-    // Масштабируем выличины (продолжение)
-
-    for(std::size_t i = 0; i < stress.size(); ++i){
-        stress[i] /= (wn * E);
-    }
-    for(std::size_t i = 0; i < leakOff.size(); ++i){
-        leakOff[i] *= std::sqrt(timeScale) / wn;
-    }
-
-    dMin1 = std::sqrt(std::pow(0.5 * dx, 2)
-        + std::pow(1.5 * dy, 2));
-    dCenter1 = dx;
-    dMax1 = std::sqrt(std::pow(0.5 * dx, 2)
-        + std::pow(0.5 * dy, 2));
-    dMin2 = std::sqrt(std::pow(1.5 * dx, 2)
-        + std::pow(1.5 * dy, 2));
-    dCenter2 = std::sqrt(2) * dx;
-
-    return 0;
-}
-
-/// \todo aaaa
-inline void saveData(
-    const std::string filename,
-    std::vector<double> &data,
-    std::vector< std::vector<std::size_t> > &index,
-    const double multiplier = 1.,
-    const std::string comment = std::string()
-){
-    std::ofstream output(filename + std::string("_m.txt"));
-
-    if(!output.good()){
-        throw std::runtime_error(
-            ai::string("Exception while saving the matrix into the file: ")
-            + filename
-        );
-    }
-
-    if(std::string() != comment){
-        output << comment << std::endl;
-    }
-
-    for(int j = (int) index[0].size() - 1; j >= 0; --j){
-        for(std::size_t i = 0; i < index.size(); ++i){
-            output << std::setw(14) << multiplier * data[index[i][j]];
-        }
-
-        output << std::endl;
-    }
-
-    output.close();
-}
-
-/// \todo aaaa
-template<typename T>
-inline void saveData(
-    const std::string filename,
-    std::vector< std::vector<T> > &data,
-    const double multiplier = 1.,
-    const std::string comment = std::string()
-){
-    std::ofstream output(filename + std::string("_m.txt"));
-
-    if(!output.good()){
-        throw std::runtime_error(
-            ai::string("Exception while saving the matrix into the file: ")
-            + filename
-        );
-    }
-
-    if(std::string() != comment){
-        output << comment << std::endl;
-    }
-
-    for(int j = (int) data[0].size() - 1; j >= 0; --j){
-        for(std::size_t i = 0; i < data.size(); ++i){
-            output << std::setw(14) << data[i][j];
-        }
-
-        output << std::endl;
-    }
-
-    output.close();
-}
-
 int calculateEverything(
     std::vector<double> &opening,
     std::vector<double> &pressure,
     std::vector<double> &concentration,
+    #if defined(USE_EIGEN)
+    Eigen::VectorXd &openingNew,
+    #else
     std::vector<double> &openingNew,
+    #endif
     std::vector< std::vector<double> > &distances,
     std::vector< std::vector<double> > &velocities,
     std::vector< std::vector<double> > &influenceMatrix,
+    #if defined(USE_EIGEN)
+    Eigen::MatrixXd &partialInfluenceMatrix,
+    #else
     std::vector< std::vector<double> > &partialInfluenceMatrix,
+    #endif
     std::vector<double> &zeroVectorXY,
     std::vector< std::vector<double> > &zeroMatrixXY,
     std::vector< std::vector<Cell> > &mesh,
@@ -548,9 +146,16 @@ int calculateEverything(
     std::vector< std::vector<double> > &layers,
     std::vector<double> &stress,
     std::vector<double> &leakOff,
+    std::vector<double> &toughness,
     std::vector<double> &flatYoungsModulus,
-    double &fluidDensity,
-    double &proppantDensity,
+    std::vector<double> &proppantDensity,
+    std::vector<double> &proppantDiameter,
+    std::vector<double> &maximumConcentration,
+    std::vector<size_t> &proppantType,
+    std::vector<size_t> &fluidType,
+    std::vector<double> &fluidDensity,
+    std::vector<double> &fluidViscosity,
+    std::vector<double> &rheologyIndex,
     double &n,
     double &mu,
     double &wn,
@@ -572,8 +177,14 @@ int calculateEverything(
     const bool considerElasticModulusContrast,
     const bool saveSteps,
     const bool runningFromGUI,
+    #if defined(BUILD_DLL)
+    const bool override,
+    DLL_Param &DLL_Parametrs
+    #else
     const bool override
+    #endif
 ){
+    double LastEmit = 0.;
     alpha = 2. / (n + 2.);
     double BAlpha = 0.25 * alpha * tan(0.5 * M_PI - M_PI * (1 - alpha));
     Amu = std::pow(BAlpha * (1 - alpha), -0.5 * alpha);
@@ -582,9 +193,9 @@ int calculateEverything(
     std::size_t step = 0;
     double savedTime = T;
     std::size_t savingStep = 1;
-    std::size_t stepToSave = 10;//(std::size_t) 1. / dt;
-    const std::size_t xSize = index.size();
-    const std::size_t ySize = index[0].size();
+    std::size_t stepToSave = (std::size_t) 1. / dt;
+    std::size_t xSize = index.size();
+    std::size_t ySize = index[0].size();
 
     double dMin1 = std::sqrt(std::pow(0.5 * dx, 2)
         + std::pow(1.5 * dy, 2));
@@ -597,7 +208,9 @@ int calculateEverything(
 
     std::vector<double> dWdt;
     std::vector<double> dCdt;
+    std::vector<double> dTdt;
     std::vector<double> savedDistances(ribbons.size(), 0.);
+    // std::vector<double> temperature(activeElements.size(), 0.);
 
     for(size_t k = 0; k < ribbons.size(); ++k){
         const size_t i = ribbons[k].i;
@@ -605,6 +218,71 @@ int calculateEverything(
 
         savedDistances[k] = distances[i][j];
     }
+
+    /////////////////////////////////////////////////////////////////////////////////////////
+    /// Задание маркеров
+    /////////////////////////////////////////////////////////////////////////////////////////
+    /// Задание маркеров для проппантов
+    #if defined(PROPPANT_MARKERS)
+    std::vector< std::vector<double> > markers;
+    std::vector<double> markerMass;
+    std::vector<double> markerVolume;
+    double injectedMass = 0.;
+    defineMarkerMass(
+        injection,
+        markerMass,
+        markerVolume,
+        proppantDensity,
+        proppantDiameter,
+        maximumConcentration,
+        proppantType,
+        wn
+    );
+    #endif
+
+
+#if !defined(PROPPANT_MARKERS)
+	std::vector< std::vector<double> > markers;
+	std::vector<double> markerMass;
+	std::vector<double> markerVolume;
+	double injectedMass = 0.;
+	/*defineMarkerMass(
+		injection,
+		markerMass,
+		markerVolume,
+		proppantDensity,
+		proppantDiameter,
+		maximumConcentration,
+		proppantType,
+		wn
+	);*/
+#endif
+
+    ///Задание маркеров для жидкостей
+    #if defined(FLUID_MARKERS)
+    std::vector< std::vector<double> > markersFluid;
+    double markerFluidVolume;
+    double injectedVolume = 0.;
+    defineMarkerVolumeAndFillCrackWithMarkers(
+        activeElements,
+        index,
+        markersFluid,
+        fluidType,
+        opening,
+        x,
+        y,
+        markerFluidVolume
+    );
+    #endif
+    /////////////////////////////////////////////////////////////////////////////////////////
+
+    #if defined(IMEX)
+        double imexD;
+        double imexCoeff;
+
+        std::vector<double> B(xSize * ySize);
+        std::vector<double> imexOpening;
+    #endif
 
     #if !defined(BUILD_DLL)
     std::cout << std::endl << "Starting calculations..." << std::endl;
@@ -630,62 +308,122 @@ int calculateEverything(
 
     auto startTime = ai::time();
 
-	// std::vector<double> val1;
-	// std::vector<double> val2;
-// meshIsNotExhausted = 0 ;
+    bool pauseCallback = false;	//Флаг того,  что на паузе мы послали кэлбак
 
-    double fluids = 0.; // сумма произвдных раскрытия
-    double sumderivatives = 0.;
-    double suminjection = 0.;
-    double cent = 0.;
+    bool flag = true;
 
-    double inifluidVolumeOut = 0.;
-    double inifluidVolumeIn = 0.;
+	std::cout << "start while" << std::endl;
+	std::cout << "modelingTime: " << modelingTime << ">= T: " << T << "&& meshIsNotExhausted: " << meshIsNotExhausted << std::endl;
 
-    double fluidEfficiency=0.;
-    double proppantEfficiency=0.;
+    double maxOpen  = 0.;
+    double maxSpeed = 0.;
 
-    calculateEfficiency(
-        fluidEfficiency,
-        proppantEfficiency,
-        injection,
-        opening,
-        wn,
-        concentration,
-        index,
-        T,
-        T0,
-        inifluidVolumeOut,
-        inifluidVolumeIn
-    );
-double maxOpen =0.;
     while(modelingTime >= T && meshIsNotExhausted){
-		// ai::printLine("1");
-		 maxOpen = wn*ai::max(opening);
+    maxOpen = wn*ai::max(opening);
 
-		double maxSpeed = ai::max(velocities)>0. ? ai::max(velocities) : 1.;
-		// ai::printLine("2");
-		// double maxVel = ai::max(velocities);
-		// // ai::printLine("3");
-		// double val1val = E.;//flatYoungsModulus[j00];
-		// // ai::printLine("3.1");
-		// val1val *=std::pow(maxOpen / dx, 3)*dt;
-		// // ai::printLine("3.2");
-		// val1val /=(std::pow(dx,3)*mu);
-		// ai::printLine("4");
-		// double val2val = -std::pow(maxOpen, 2+n)*dt*std::pow(maxOpen,1-n) / (std::pow(dx,3)*mu);
-		// val1.push_back(val1val);
-		// val2.push_back(val2val);
-		// ai::printLine("5");
-        if(-1. == timeStep){
-			// n = 0.9;
-            // dt = 0.05 * mu / std::pow(maxOpen , 2. + n) / std::pow(maxSpeed, 1. - n ) / (E  / std::pow(dx , 3));
-			// ai::printLine(ai::string(dt));
-			//dt = 0.05 * std::pow(mu, 1./n )/ (E * std::pow(wn * ai::max(opening) / dx, (2.*n+1.)/n));
-			dt = 0.05 * mu / (E * std::pow(wn * ai::max(opening) / dx, 3));
+    maxSpeed = ai::max(velocities)>0. ? ai::max(velocities) : 1.;
+
+
+    #if defined(BUILD_DLL)
+        //Обработчик нажатия на кнопку RUN в интерфейсе
+        if (DLL_Parametrs.Dll_State == DLL_Parametrs.Running)
+        {
+            pauseCallback = false;
         }
-		// std::cout<<"dt = "<<std::precisi()<<dt<<std::endl;
-		// ai::printLine(ai::string(dt));
+        //Обработчик нажатия на кнопку PAUSE в интерфейсе
+        if (DLL_Parametrs.Dll_State == DLL_Parametrs.Paused)
+        {
+            if (!pauseCallback)
+            {
+                double fluidEfficiency;
+                double proppantEfficiency;
+
+                /// Вычисляем эффективность
+                calculateEfficiency(
+                    fluidEfficiency,
+                    proppantEfficiency,
+                    injection,
+                    opening,
+                    wn,
+                    concentration,
+                    index,
+                    T,
+                    T0
+                );
+
+                if (std::isnan(fluidEfficiency)) {
+                    fluidEfficiency = 0.;
+                    proppantEfficiency = 0.;
+                }
+
+                /// Сохраняем сжимающие напряжения в центральном слое
+                double nominalStress = 0.;
+                for (std::size_t i = 0; i < layers.size(); ++i) {
+                    if (0. > layers[i][0] * layers[i][1]) {
+                        nominalStress = layers[i][2] * std::pow(10., -6);
+                    }
+                }
+
+				DLL_Parametrs.J_String = ExportJson(
+					opening,
+					wn,
+					pressure,
+					concentration,
+					markers,
+					markerVolume,
+					x,
+					y,
+					dx,
+					dy,
+					i00,
+					j00,
+					index,
+					T,
+					timeScale,
+					fluidEfficiency,
+					fluidDensity,
+					proppantDensity,
+					fluidInjection,
+					proppantInjection,
+					nominalStress,
+					DLL_Parametrs
+				);
+
+                Solver::DataCallback dataCallback = Solver::Callback::GetDataCallback();
+//              DLL_Parametrs.J_String = ExportJson(opening, wn, pressure, concentration, x, y, dx, dy, i00, j00, index, T, timeScale, fluidEfficiency, fluidDensity, proppantDensity, fluidInjection, proppantInjection, nominalStress, DLL_Parametrs).c_str();
+                ai::saveLine("pause.json", DLL_Parametrs.J_String);
+
+                dataCallback(DLL_Parametrs.J_String.c_str());
+
+
+            }
+            pauseCallback = true;
+            continue;
+        }
+        //Обработчик нажатия на кнопку STOP в интерфейсе
+        if (DLL_Parametrs.Dll_State == DLL_Parametrs.Idle)
+        {
+            ai::saveLine("break", DLL_Parametrs.J_String.c_str());
+            break;
+        }
+        #endif
+        // ai::printMarker(500);
+
+        if(-1. == timeStep){
+            #if defined(FLUID_MARKERS)
+            dt = 0.05 * ai::min(fluidViscosity) * injection[0][5]
+                / (E * std::pow(wn * ai::max(opening) / dx, 3));
+            #else
+            dt = 0.05 * mu / std::pow(maxOpen , 2. + n) /
+                        std::pow(maxSpeed, 1. - n ) / (E  / std::pow(dx , 3));
+            #endif
+        }
+        #if defined(IMEX)
+        dt *= 1.7;
+        imexD = 0.01 * 0.05 * std::pow(1000.*wn*ai::max(opening), 3);
+        imexCoeff = (dx * dy / (imexD * dt) + 4.);
+        #endif
+
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         time0 = ai::time();
         #endif
@@ -697,6 +435,7 @@ double maxOpen =0.;
             openingNew,
             stress
         );
+        // ai::printMarker();
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         timeMeasurements[0] += ai::duration(time0, "us");
         #endif
@@ -704,6 +443,88 @@ double maxOpen =0.;
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         auto time1 = ai::time();
         #endif
+/////////////////////////////////////////////////////////////////
+        #if defined(PROPPANT_MARKERS)
+        /// Добавление маркеров для проппанта
+        if (proppantInjection > epsilon) {
+            addMarkers(
+                markers,
+                markerMass,
+                proppantType,
+                proppantDensity,
+                concentration[index[i00][j00]],
+                opening[index[i00][j00]],
+                fluidInjection,
+                proppantInjection,
+                injectionIndex,
+                injectedMass,
+                wn
+            );
+        }
+        #endif
+
+        #if defined(FLUID_MARKERS)
+        ///Добавление маркеров для жидкостей
+        addMarkersFluid(
+            markersFluid,
+            fluidType,
+            fluidInjection,
+            injectionIndex,
+            injectedVolume,
+            markerFluidVolume
+        );
+        #endif
+        /////////////////////////////////////////////////////////////////
+
+        #if defined(PROPPANT_MARKERS)
+        calculateOpeningAndConcentrationSpeedsDP(
+            dWdt,
+            opening,
+            concentration,
+            pressure,
+            leakOff,
+            index,
+            activeElements,
+            elementIsActive,
+            markers,
+            activationTime,
+            proppantDensity,
+            proppantDiameter,
+            maximumConcentration,
+            markerMass,
+            markerVolume,
+            fluidDensity[0],
+            T,
+            n,
+            wn
+        );
+        #elif defined(FLUID_MARKERS)
+        calculateOpeningAndConcentrationSpeedsDF(
+            dWdt,
+            dCdt,
+            opening,
+            concentration,
+            pressure,
+            leakOff,
+            index,
+            activeElements,
+            elementIsActive,
+            markersFluid,
+            activationTime,
+            fluidViscosity,
+            rheologyIndex,
+            fluidDensity,
+            proppantDensity[0],
+            proppantDiameter[0],
+            maximumConcentration[0],
+            markerFluidVolume,
+            T,
+            n,
+            wn
+        );
+        #else
+        // ai::saveVector("opening",opening );
+        // ai::printMarker(999999);
         calculateOpeningAndConcentrationSpeeds(
             dWdt,
             dCdt,
@@ -714,40 +535,17 @@ double maxOpen =0.;
             index,
             activeElements,
             elementIsActive,
-            //mesh,
             activationTime,
+            fluidDensity[0],
+            proppantDensity[0],
+            proppantDiameter[0],
+            maximumConcentration[0],
             T,
-            fluidDensity,
-            proppantDensity,
-            n
+            n,
+            wn
         );
-        // ai::printVector(dWdt);
-        fluids = 0.;
-        cent = 0.;
-        // for(size_t i = 0; i < dWdt.size(); ++i){
-        //     fluids += 2*dWdt[i]*dx*dy;
-        // }
-        // for(size_t k = 0 ; k < activeElements.size(); ++k){
-        //     if(activeElements[k][0] == 0){
-        //         const size_t i = activeElements[k][0];
-        //         const size_t j = activeElements[k][1];
-        //         cent += dWdt[index[i][j]]*dx*dy;
-        //     }
-        // }
-        // fluids-=cent;
-
-        // std::cout<<"cent coloumn = "<<cent<<std::endl;
-        // ai::printMatrix(activeElements);
-
-        // std::cout<<std::setprecision(13)<<"fluidinjection = "<<fluidInjection<<std::endl;
-        //
-        // // std::cout<< std::setprecision(9)<<"dt = "<<dt<<std::endl;
-        //
-        // std::cout<< std::setprecision(13)<<"fluids = "<< fluids*dx*dx - cent*dx*dx <<std::endl;
-
-        // std::cout<<std::setprecision(9)<<""
-
-
+        // ai::printMarker();
+        #endif
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         timeMeasurements[1] += ai::duration(time1, "us");
         #endif
@@ -763,7 +561,7 @@ double maxOpen =0.;
                 const size_t j = ribbons[k].j;
 
                 distances[i][j] = 0.25 *  sqrt(0.5 * M_PI) * E
-                    * opening[index[i][j]] / Kic;
+                    * opening[index[i][j]] / toughness[j];
 
                 if(epsilon > distances[i][j]){
                     distances[i][j] = epsilon;
@@ -778,8 +576,7 @@ double maxOpen =0.;
             }
 
             if(epsilon < maxDeltaDistance){
-                stepToCheck =
-                std::round(
+                stepToCheck = std::round(
                     dx * (T - savedTime) / (20. * dt * maxDeltaDistance)
                 );
             }else{
@@ -802,7 +599,6 @@ double maxOpen =0.;
                 }
             }
         }
-        // std::cout<<"step to check step = "<<stepToCheck<<std::endl;
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         timeMeasurements[2] += ai::duration(time2, "us");
         #endif
@@ -810,15 +606,40 @@ double maxOpen =0.;
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         auto time3 = ai::time();
         #endif
-        // double dWdtdif = 0.;
-        // std::cout<<"opening size = "<<opening.size()<<std::endl;
+        #if defined(IMEX)
+        std::fill(B.begin(), B.end(), 0.);
+        for(std::size_t k = 0; k < activeElements.size(); ++k){
+            std::size_t i = activeElements[k][0];
+            std::size_t j = activeElements[k][1];
+
+            double lapl = opening[index[i + 1][j]] + opening[index[i][j + 1]]
+                + opening[index[i][j - 1]];
+
+            if(i00 == i){
+                lapl += opening[index[i + 1][j]];
+            }else{
+                lapl += opening[index[i - 1][j]];
+            }
+
+            B[index[i][j]] = opening[index[i][j]] * imexCoeff
+                + dWdt[index[i][j]] * dx * dy / imexD - lapl;
+        }
+        conjugateGradient(B, imexOpening, imexCoeff, xSize, ySize);
+        #endif
         for(std::size_t i = 0; i < opening.size(); ++i){
-            concentration[i] = ai::max(
-                concentration[i] * opening[i] + dCdt[i] * dt,
-                0.
-            );
-                opening[i] += dWdt[i] * dt;
+            #if defined(PROPPANT_MARKERS)
+                concentration[i] = concentration[i] * opening[i];
+            #else
+                concentration[i] = concentration[i] * opening[i] + dCdt[i] * dt;
+            #endif
+
+            #if defined(IMEX)
+                opening[i] = ai::max(imexOpening[i], 0.);
+            #else
+                opening[i] = opening[i] + dWdt[i] * dt;
                 // opening[i] = ai::max(opening[i] + dWdt[i] * dt, 0.);
+            #endif
+
             if(epsilon < opening[i]){
                 concentration[i] /= opening[i];
             }else{
@@ -829,13 +650,8 @@ double maxOpen =0.;
                     #endif
                 }
             }
-
-            /// \todo проверить баланс масс
-            if(0.585 - epsilon < concentration[i]){
-                concentration[i] = 0.585 - epsilon;
-            }
         }
-        // std::cout<<"xSize = "<<xSize<<" ySize = "<<ySize<<std::endl;
+
         #if defined(DEBUG) && !defined(BUILD_DLL)
         if(std::isnan(opening[index[i00][j00]])){
             ai::printLine(
@@ -855,40 +671,31 @@ double maxOpen =0.;
         timeMeasurements[3] += ai::duration(time3, "us");
         #endif
 
+
+
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         auto time4 = ai::time();
         #endif
-
-
-		// ai::saveVector(ai::string(T)+"open",opening );
-		// ai::saveVector(ai::string(T)+"press",pressure );
-
-
-
-        if(step >= stepToCheck ){
+        if(step >= stepToCheck){
+            #if !defined(BUILD_DLL) && defined(DEBUG)
             if(runningFromGUI){
                 std::cout << "Progress: " << (T - T0) / (modelingTime - T0)
                     << std::endl;
             }else{
                 ai::showProgressBar((T - T0) / (modelingTime - T0));
             }
-
+            #endif
+            ai::showProgressBar((T - T0) / (modelingTime - T0));
             step = 0;
 
-            if(0 != regime){
-                stepToCheck = std::round(dx / (20. * dt * ai::max(velocities)) );
 
-         }
+            if(0 != regime){
+                stepToCheck = std::round(
+                    dx / (20. * dt * ai::max(velocities))
+                );
+            }
 
             const size_t savedSize = activeElements.size();
-
-            // if(-1. == timeStep){
-            //     if(230 < savedSize){
-            //         dt = 23.5 * std::pow(10., -3) / ((double) savedSize);
-            //     }else{
-            //         dt = std::pow(10., -4);
-            //     }
-            // }
 
             std::vector<Ribbon> oldRibbons = ribbons;
 
@@ -897,43 +704,147 @@ double maxOpen =0.;
                 const size_t j = ribbons[k].j;
 
                 if(2 >= j || ySize - 2 <= j || xSize - 2 <= i){
-                    meshIsNotExhausted = false;
-                    break;
+                    /// При исчерпании сетки может сделать одно из трёх:
+                    /// 1) закончить вычисления с предупреждением,
+                    /// 2) изменить масштаб сетки,
+                    /// 3) достроить сетку.
+
+                    /// 1) Выход из цикла
+                    // meshIsNotExhausted = false;
+					// std::cout << "1. Mesh is NotExhausted. End calculate" << std::endl;
+                    // break;
+
+                    int returnCode;
+                    // делаем удвоение при заканчивающейся сетки
+                    meshScalingCounter = 1;
+
+                    if(0 < meshScalingCounter){
+                        /// 2) Масштабирование
+						std::cout << "2. Scalling. Continue calculate" << std::endl;
+						returnCode = scaleMesh(
+                            x,
+                            y,
+                            mesh,
+                            index,
+                            activeElements,
+                            elementIsActive,
+                            activationTime,
+                            ribbons,
+                            distances,
+                            opening,
+                            concentration,
+                            layers,
+                            flatYoungsModulus,
+                            stress,
+                            leakOff,
+                            toughness,
+                            zeroVectorXY,
+                            zeroMatrixXY,
+                            xSize,
+                            ySize,
+                            initialRadius,
+                            axMax,
+                            dMin1,
+                            dCenter1,
+                            dMax1,
+                            dMin2,
+                            dCenter2,
+                            dx,
+                            dy,
+                            dt,
+                            mu,
+                            n,
+                            wn,
+                            timeScale,
+                            T,
+                            T0,
+                            E,
+                            considerElasticModulusContrast,
+                            #if defined(PROPPANT_MARKERS)
+                            markers,
+                            markerVolume,
+                            #endif
+                            meshScalingCounter
+                        );
+                    }else{
+                        /// 3) Достроение сетки
+                        /// Добавляем по 10 элементов вдоль каждой оси
+						std::cout << "3. Adding 10 elements. Continue calculate" << std::endl;
+						returnCode = completeMesh(
+                            xSize + 10,
+                            x,
+                            y,
+                            i00,
+                            j00,
+                            mesh,
+                            ribbons,
+                            index,
+                            opening,
+                            pressure,
+                            concentration,
+                            distances,
+                            activeElements,
+                            elementIsActive,
+                            activationTime,
+                            layers,
+                            flatYoungsModulus,
+                            stress,
+                            leakOff,
+                            toughness,
+                            wn,
+                            timeScale,
+                            mu,
+                            n,
+                            xSize,
+                            ySize,
+                            considerElasticModulusContrast,
+                            influenceMatrix
+                        );
+                    }
+                    // oldRibbons = ribbons; todo ???
+                    //
+                    /// todo savedDistances должны быть в scaleMesh
+                    /// и completeMesh!
+                    //
+                    if(0 != returnCode){
+						std::cout << "return from point calculate1";
+                        return returnCode;
+                    }
                 }
 
                 const double d = distances[i][j];
 
                 if(0 < i){
-                    findNewRibbons(i - 1, j, d, dMin1, dCenter1, n, opening, leakOff, mesh,
+                    findNewRibbons(i - 1, j, d, dMin1, dCenter1, n, opening, leakOff, toughness, mesh,
                         index, activeElements, elementIsActive, activationTime, ribbons, oldRibbons, distances,
                         velocities, T, opening[index[i - 1][j]]);
 
-                    findNewRibbons(i - 1, j - 1, d, dMin2, dCenter2, n, opening, leakOff, mesh,
+                    findNewRibbons(i - 1, j - 1, d, dMin2, dCenter2, n, opening, leakOff, toughness, mesh,
                         index, activeElements, elementIsActive, activationTime, ribbons, oldRibbons, distances,
                         velocities, T, opening[index[i - 1][j - 1]]);
 
-                    findNewRibbons(i - 1, j + 1, d, dMin2, dCenter2, n, opening, leakOff, mesh,
+                    findNewRibbons(i - 1, j + 1, d, dMin2, dCenter2, n, opening, leakOff, toughness, mesh,
                         index, activeElements, elementIsActive, activationTime, ribbons, oldRibbons, distances,
                         velocities, T, opening[index[i - 1][j + 1]]);
                 }
 
-                findNewRibbons(i + 1, j, d, dMin1, dCenter1, n, opening, leakOff, mesh, index,
+                findNewRibbons(i + 1, j, d, dMin1, dCenter1, n, opening, leakOff, toughness, mesh, index,
                     activeElements, elementIsActive, activationTime, ribbons, oldRibbons, distances,
                     velocities, T, opening[index[i + 1][j]]);
 
-                findNewRibbons(i, j - 1, d, dMin1, dCenter1, n, opening, leakOff, mesh, index,
+                findNewRibbons(i, j - 1, d, dMin1, dCenter1, n, opening, leakOff, toughness, mesh, index,
                     activeElements, elementIsActive, activationTime, ribbons, oldRibbons, distances,
                     velocities, T, opening[index[i][j - 1]]);
 
-                findNewRibbons(i, j + 1, d, dMin1, dCenter1, n, opening, leakOff, mesh, index,
+                findNewRibbons(i, j + 1, d, dMin1, dCenter1, n, opening, leakOff, toughness, mesh, index,
                     activeElements, elementIsActive, activationTime, ribbons, oldRibbons, distances,
                     velocities, T, opening[index[i][j + 1]]);
 
-                findNewRibbons(i + 1, j - 1, d, dMin2, dCenter2, n, opening, leakOff, mesh,
+                findNewRibbons(i + 1, j - 1, d, dMin2, dCenter2, n, opening, leakOff, toughness, mesh,
                     index, activeElements, elementIsActive, activationTime, ribbons, oldRibbons, distances,
                     velocities, T, opening[index[i + 1][j - 1]]);
 
-                findNewRibbons(i + 1, j + 1, d, dMin2, dCenter2, n, opening, leakOff, mesh,
+                findNewRibbons(i + 1, j + 1, d, dMin2, dCenter2, n, opening, leakOff, toughness, mesh,
                     index, activeElements, elementIsActive, activationTime, ribbons, oldRibbons, distances,
                     velocities, T, opening[index[i + 1][j + 1]]);
 
@@ -959,33 +870,10 @@ double maxOpen =0.;
             }
 
             // Сохраняем параметры трещины
-
             calculateCrackGeometry(mesh, distances, length, height);
-            double fluidEfficiency = 0.;
-            double proppantEfficiency = 0.;
 
-            double fluidVolumeOut = 0.;
-            double fluidVolumeIn = 0.;
+            // ai::printMarker();
 
-            // calculateEfficiency(
-            //     fluidEfficiency,
-            //     proppantEfficiency,
-            //     injection,
-            //     opening,
-            //     wn,
-            //     concentration,
-            //     index,
-            //     T,
-            //     T0,
-            //     fluidVolumeOut,
-            //     fluidVolumeIn
-            // );
-
-            //std::cout<<"fluidEfficiency = "<<fluidEfficiency<<std::endl;
-
-
-            sumderivatives += fluids*dt*wn;
-            suminjection += fluidInjection*dt*wn;
             fracture.push_back(
                 std::vector<double>{
                     T,
@@ -993,17 +881,7 @@ double maxOpen =0.;
                     pressure[index[i00][j00]],
                     length,
                     height,
-                    length / height,
-                    fluidEfficiency,
-                    //fluids*dx*dx - cent*dx*dx - fluidInjection
-                    100*fluids/fluidInjection,
-                    fluids,//[8]
-                    1.,//[9]
-                    fluids*dt*wn,//[10]
-                    suminjection, //[11]
-                    sumderivatives, //[12]
-                    fluidVolumeOut - inifluidVolumeOut,//[13]
-                    fluidVolumeIn - inifluidVolumeIn//[14]
+                    length / height
                 }
             );
 
@@ -1027,34 +905,108 @@ double maxOpen =0.;
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         auto time5 = ai::time();
         #endif
-        if(saveSteps && 0 == globalStep % stepToSave){
-            #if defined(BUILD_DLL)
-            /// \todo Сохраняться в json
-            #else
-            saveData(
-                ai::string("./Results/Opening/")
-                    + ai::prependNumber(savingStep, 3),
-                opening,
-                index,
-                1000. * wn
-            );
-            saveData(
-                ai::string("./Results/Pressure/")
-                    + ai::prependNumber(savingStep, 3),
-                pressure,
-                index
-            );
-            saveData(
-                ai::string("./Results/Concentration/")
-                    + ai::prependNumber(savingStep, 3),
-                concentration,
-                index
-            );
-            #endif
 
-            ++savingStep;
-        }
-        #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
+
+        #if defined(BUILD_DLL)
+		////////////////////////////////////////////////////////////////////////////////////////////////
+		//Обработка создания выгузки значений расчета по emit'у
+		////////////////////////////////////////////////////////////////////////////////////////////////
+		if (T * 60. - DLL_Parametrs.Emit_time >= LastEmit){
+		std::cout << T * 60. - DLL_Parametrs.Emit_time << "Last emit " << LastEmit << std::endl;
+			//Смещаем точку последнего имита
+			LastEmit = LastEmit + DLL_Parametrs.Emit_time;
+			double fluidEfficiency;
+			double proppantEfficiency;
+
+			/// Вычисляем эффективность
+			calculateEfficiency(
+				fluidEfficiency,
+				proppantEfficiency,
+				injection,
+				opening,
+				wn,
+				concentration,
+				index,
+				T,
+				T0
+			);
+
+			if (std::isnan(fluidEfficiency)) {
+				fluidEfficiency = 0.;
+				proppantEfficiency = 0.;
+			}
+
+			/// Сохраняем сжимающие напряжения в центральном слое
+			double nominalStress = 0.;
+			for (std::size_t i = 0; i < layers.size(); ++i) {
+				if (0. > layers[i][0] * layers[i][1]) {
+					nominalStress = layers[i][2] * std::pow(10., -6);
+				}
+			}
+
+			DLL_Parametrs.J_String = ExportJson(
+				opening,
+				wn,
+				pressure,
+				concentration,
+				markers,
+				markerVolume,
+				x,
+				y,
+				dx,
+				dy,
+				i00,
+				j00,
+				index,
+				T,
+				timeScale,
+				fluidEfficiency,
+				fluidDensity,
+				proppantDensity,
+				fluidInjection,
+				proppantInjection,
+				nominalStress,
+				DLL_Parametrs
+			).c_str();
+
+			std::string filename = "emit_" + std::to_string(LastEmit) + ".json";
+			ai::saveLine(filename, DLL_Parametrs.J_String);
+			std::cout << "emit" << ai::string(LastEmit) << std::endl;
+
+			Solver::DataCallback dataCallback = Solver::Callback::GetDataCallback();
+
+			dataCallback(DLL_Parametrs.J_String.c_str());
+		}
+        #endif
+		//       #else
+		if (
+         saveSteps //&& T > 340.74
+					  && 0 == globalStep % stepToSave
+			) {
+			saveData(
+				ai::string("./Results/Opening/")
+				+ ai::prependNumber(savingStep, 3),
+				opening,
+				index,
+				1000. * wn
+			);
+			saveData(
+				ai::string("./Results/Pressure/")
+				+ ai::prependNumber(savingStep, 3),
+				pressure,
+				index
+			);
+			saveData(
+				ai::string("./Results/Concentration/")
+				+ ai::prependNumber(savingStep, 3),
+				concentration,
+				index
+			);
+
+			++savingStep;
+		}
+
+#if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         timeMeasurements[5] += ai::duration(time5, "us");
         #endif
 
@@ -1096,6 +1048,12 @@ double maxOpen =0.;
             for(std::size_t i = 0; i < leakOff.size(); ++i){
                 leakOff[i] /= std::sqrt(timeScale) / wn;
             }
+            for(std::size_t i = 0; i < toughness.size(); ++i){
+                toughness[i] *= std::pow(
+                    mu * E * std::pow(E / timeScale, n),
+                    1. / (n + 2.)
+                );
+            }
             for(std::size_t i = 0; i < injection.size(); ++i){
                 injection[i][2] /= timeScale / (wn * 60.);
             }
@@ -1109,10 +1067,15 @@ double maxOpen =0.;
             for(std::size_t i = 0; i < leakOff.size(); ++i){
                 leakOff[i] *= std::sqrt(timeScale) / wn;
             }
+            for(std::size_t i = 0; i < toughness.size(); ++i){
+                toughness[i] /= std::pow(
+                    mu * E * std::pow(E / timeScale, n),
+                    1. / (n + 2.)
+                );
+            }
             for(std::size_t i = 0; i < injection.size(); ++i){
                 injection[i][2] *= timeScale / (wn * 60.);
             }
-            Kic /= std::pow(mu * E * std::pow(E / timeScale, n), 1. / (n + 2.));
             alpha = 2. / (n + 2.);
             BAlpha = 0.25 * alpha * tan(0.5 * M_PI - M_PI * (1 - alpha));
             Amu = std::pow(BAlpha * (1 - alpha), -0.5 * alpha);
@@ -1128,7 +1091,7 @@ double maxOpen =0.;
                 timeToChangeInjection = modelingTime + 10 * dt;
             }
 
-            #if !defined(BUILD_DLL)
+           // #if !defined(BUILD_DLL)
             std::string line("Time = ");
             line += ai::string(injection[injectionIndex - 1][0])
                 + ai::string(". Injection was changed.");
@@ -1137,7 +1100,7 @@ double maxOpen =0.;
                 ai::string("Current fluid: n = ") + ai::string(n)
                 + ai::string(", mu = ") + ai::string(mu)
             );
-            #endif
+            //#endif
         }
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         timeMeasurements[6] += ai::duration(time6, "us");
@@ -1148,11 +1111,14 @@ double maxOpen =0.;
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
         auto time7 = ai::time();
         #endif
+
         if(
             0 < meshScalingCounter
-            && length > 4.* initialRadius
-            && height > 2.* initialRadius
+            && length > 4 * initialRadius
+            && height > 4 * initialRadius
+            // && length >= 0.9 * dx *
         ){
+            std::cout<<"Mesh scaling..";
             int returnCode = scaleMesh(
                 x,
                 y,
@@ -1169,6 +1135,7 @@ double maxOpen =0.;
                 flatYoungsModulus,
                 stress,
                 leakOff,
+                toughness,
                 zeroVectorXY,
                 zeroMatrixXY,
                 xSize,
@@ -1183,17 +1150,24 @@ double maxOpen =0.;
                 dx,
                 dy,
                 dt,
+                mu,
+                n,
                 wn,
                 timeScale,
                 T,
                 T0,
                 E,
                 considerElasticModulusContrast,
+                #if defined(PROPPANT_MARKERS)
+                markers,
+                markerVolume,
+                #endif
                 meshScalingCounter
             );
-
+            std::cout<<"at Time : "<<T<<std::endl;
             if(0 != returnCode){
-                return returnCode;
+				std::cout << "return from point calculate2";
+				return returnCode;
             }
         }
         #if defined(MEASURE_TIME) && !defined(BUILD_DLL)
@@ -1239,10 +1213,85 @@ double maxOpen =0.;
     std::cout << "Measured times in us." << std::endl;
     #endif
 
-	// ai::saveVector("./Results/val1", val1);
-	// ai::saveVector("./Results/val2", val2);
 
-    return 0;
+	/////////////////////////////////////////////////////////////////////////////////////////
+	//Выдаем окончательный вид трещины. Нужно при однородной среде и одной закачке (автомоделка)
+	/////////////////////////////////////////////////////////////////////////////////////////
+	double fluidEfficiency;
+	double proppantEfficiency;
+
+	/// Вычисляем эффективность
+	calculateEfficiency(
+		fluidEfficiency,
+		proppantEfficiency,
+		injection,
+		opening,
+		wn,
+		concentration,
+		index,
+		T,
+		T0
+	);
+
+	if (std::isnan(fluidEfficiency)) {
+		fluidEfficiency = 0.;
+		proppantEfficiency = 0.;
+	}
+
+	/// Сохраняем сжимающие напряжения в центральном слое
+	double nominalStress = 0.;
+	for (std::size_t i = 0; i < layers.size(); ++i) {
+		if (0. > layers[i][0] * layers[i][1]) {
+			nominalStress = layers[i][2] * std::pow(10., -6);
+		}
+	}
+
+    // DLL_Param DLL_Parametrs;
+    #if defined(BUILD_DLL)
+
+	DLL_Parametrs.J_String = ExportJson(
+		opening,
+		wn,
+		pressure,
+		concentration,
+		markers,
+		markerVolume,
+		x,
+		y,
+		dx,
+		dy,
+		i00,
+		j00,
+		index,
+		T,
+		timeScale,
+		fluidEfficiency,
+		fluidDensity,
+		proppantDensity,
+		fluidInjection,
+		proppantInjection,
+		nominalStress,
+		DLL_Parametrs
+	).c_str();
+
+	std::string filename = "emit_" + std::to_string(LastEmit) + ".json";
+	ai::saveLine(filename, DLL_Parametrs.J_String);
+	std::cout << "emit" << ai::string(LastEmit) << std::endl;
+
+	Solver::DataCallback dataCallback = Solver::Callback::GetDataCallback();
+
+	dataCallback(DLL_Parametrs.J_String.c_str());
+	/////////////////////////////////////////////////////////////////////////////////////////
+	//Конец. Выдаем окончательный вид трещины. Нужно при однородной среде и одной закачке (автомоделка)
+	/////////////////////////////////////////////////////////////////////////////////////////
+
+    #endif
+
+	std::cout << "End Time: " << T << std::endl;
+
+	std::cout << "return from point calculate 3";
+
+	return 0;
 }
 
 /*!
@@ -1270,7 +1319,16 @@ double maxOpen =0.;
  \param[in] numberOfThreads – число параллельных потоков
  \return Код завершения
 */
+
+
 int planar3D(
+    #if defined(BUILD_DLL)
+    DLL_Param &DLL_Parametrs,
+    std::vector< std::vector<double> > &layers,
+    std::vector< std::vector<double> > &injection,
+    bool &initialized
+    //Флаг, что инициализация (массштабирование) переменных прошла. от него нужно избавляться
+    #else
     double modelingTime,
     double timeStep,
     const double timeScale,
@@ -1285,7 +1343,30 @@ int planar3D(
     const bool runningFromGUI,
     const std::size_t numberOfThreads,
     const bool override = false
+    #endif
 ){
+    #if defined(BUILD_DLL)
+    double modelingTime = DLL_Parametrs.modelingTime / 60.;
+    double timeStep = -1.;
+    double timeScale = 60.;
+	double cellSize = -1.;
+	double meshSize = 61.;
+	int meshScalingCounter = 2;
+	//Управление размером сетки из интерфейса
+	if (DLL_Parametrs.IS_CLOSURE)
+	{
+		cellSize = DLL_Parametrs.dx;
+		meshSize = DLL_Parametrs.nx;
+		meshScalingCounter = (int)DLL_Parametrs.AZ;
+	}
+		std::cout << "cellSize=" << cellSize << "  meshSize=" << meshSize << "  Scaling:" << meshScalingCounter << std::endl;
+    const bool considerElasticModulusContrast = false;
+    const bool saveSteps = false;
+    const bool runningFromGUI = false;
+    const std::size_t numberOfThreads = 1;
+    const bool override = true;
+    #else
+    bool initialized = false;
 
     if(!runningFromGUI){
         printLogo();
@@ -1332,20 +1413,28 @@ int planar3D(
 
     // Подгружаем входные данные
 
-    nlohmann::json importData;
+    // nlohmann::json importData;
 
     std::vector< std::vector<double> > layers;
     std::vector< std::vector<double> > injection;
 
-    if(!importInitialData(pathToImportFolder, importData)){
-        return 22;
+    // pathToParametersFile
+    // if(!importInitialData(pathToImportFolder, importData)){
+    //     return 22;
+    // }
+
+    if(std::string() != pathToImportFolder){
+        pathToLayersFile = pathToImportFolder
+            + std::string("/") + pathToLayersFile;
+        pathToInjectionFile = pathToImportFolder
+            + std::string("/") + pathToInjectionFile;
     }
 
-    if(0 < importData.size()){
-        modelingTime = importData["time"].get<double>();
-        pathToLayersFile = std::string();
-        pathToInjectionFile = std::string();
-    }
+    // if(0 < importData.size()){
+    //     modelingTime = importData["time"].get<double>();
+    //     pathToLayersFile = std::string();
+    //     pathToInjectionFile = std::string();
+    // }
 
     if(
         !setInitialData(
@@ -1357,20 +1446,19 @@ int planar3D(
     ){
         return 22;
     }
+    std::cout<<"layers:"<<std::endl;
     ai::printMatrix(layers);
-    ai::printMatrix(injection);
-    //Интерполируем на планаровкую сетку
-     // ApproximateLayers(layers, cellSize);
 
-     // std::cout<<"Interpolated layers:"<<std::endl;
-     // ai::printMatrix(layers);
+    std::cout<<"injection:"<<std::endl;
+    ai::printMatrix(injection);
     // Пересчитываем значения для слоёв в величины СИ
-// return 1;
+
     for(std::size_t i = 0; i < layers.size(); ++i){
         layers[i][2] *= std::pow(10, 6);
         layers[i][3] *= std::pow(10, 9);
         layers[i][5] *= std::pow(10, -6);
     }
+    #endif
 
     // Находим эффективный плоский модуль Юнга
 
@@ -1389,15 +1477,46 @@ int planar3D(
         return 23;
     }
 
-    size_t injectionIndex = 0;
+    std::size_t injectionIndex = 0;
 
     double timeToChangeInjection = modelingTime * 1.1;
     fluidInjection = injection[injectionIndex][2];
     proppantInjection = injection[injectionIndex][3];
     double n = injection[injectionIndex][4];
     double mu = injection[injectionIndex][5];
-    double fluidDensity = 1000;
-    double proppantDensity = 2500;
+    ////////////////////////////////////////////////////////////////////////////
+
+    std::vector<double> proppantDensity;
+    std::vector<double> proppantDiameter;
+    std::vector<double> maximumConcentration;
+    std::vector<size_t> proppantType;
+    std::vector<size_t> fluidType;
+    std::vector<double> fluidDensity;
+    std::vector<double> fluidViscosity;
+    std::vector<double> rheologyIndex;
+    size_t j = 0;
+    #if !defined(PROPPANT_MARKERS)
+    proppantDensity.push_back(2500.);
+    proppantDiameter.push_back(0.002);
+    maximumConcentration.push_back(0.585);
+    #endif
+    for (std::size_t i = 0; i < injection.size(); ++i) {
+        fluidViscosity.push_back(injection[i][5] / injection[0][5]);
+        rheologyIndex.push_back(injection[i][4]);
+        fluidType.push_back(i);
+        fluidDensity.push_back(1000.);
+        if (injection[i][3] > epsilon) {
+            proppantDensity.push_back(2500.);
+            proppantDiameter.push_back(0.002);
+            maximumConcentration.push_back(0.585);
+            proppantType.push_back(j);
+            ++j;
+        }
+        else {
+            proppantType.push_back(0);
+        }
+    }
+    ////////////////////////////////////////////////////////////////////////////
 
     ++injectionIndex;
 
@@ -1411,10 +1530,9 @@ int planar3D(
         mu * 2. * std::pow(2. * (2. * n + 1.) / n, 1. / n)
         / (E * std::pow(timeScale, n)), 1. / (n + 2.)
     );
-
-    std::cout<<"wn = "<<wn<<std::endl;
     const double gammaR = 1. / 3. * (1. + n / (n + 2.));
 
+    #if !defined(BUILD_DLL)
     // Выводим входные параметры
 
     if(override){
@@ -1427,11 +1545,12 @@ int planar3D(
         std::cout << "Incoming parameters:" << std::endl
             << "  Q = " << fluidInjection << ", " << "n = " << n
             << ", mu = " << mu << ";" << std::endl
-            << "  E\' = " << E << ", Kic = " << Kic << ";" << std::endl
+            << "  E\' = " << E << ";" << std::endl
             << "  time = " << modelingTime << ", time step = " << timeStep
             << ", time scale = " << timeScale << ";"
             << std::endl;
     }
+    #endif
 
     // Масштабируем величины
 
@@ -1486,21 +1605,13 @@ int planar3D(
     const double initialVelocity = initialRadius * gammaR
         * std::pow(T0, gammaR - 1);
 
-    // if(0 < importData.size()){
-    //     cellSize = round(
-    //         initialRadius / importData["mesh"]["cell"]["length"].get<double>()
-    //     );
-    //     meshSize = floor(
-    //         (importData["mesh"]["length"].get<double>() - 1.) / cellSize
-    //     );
-    // }
-
     // Автоматически задаём размер ячейки, если требуется
 
     if(-1. == cellSize){
         cellSize = initialRadius / 5. - epsilon;
     }
 
+    #if !defined(BUILD_DLL)
     // Выводим входные параметры (продолжение)
 
     if(!runningFromGUI){
@@ -1508,6 +1619,7 @@ int planar3D(
             << " scaling = " << meshScalingCounter << "." << std::endl;
         std::cout << "Initial regime: " << regimeName() << "." << std::endl;
     }
+    #endif
 
     dt = 0.0001 * std::pow(5. / floor(initialRadius / cellSize), 2);
 
@@ -1517,8 +1629,10 @@ int planar3D(
         if(timeStep < dt){
             dt = timeStep;
         }else{
+            #if !defined(BUILD_DLL)
             std::cerr << "Warning: time step is too big. It was changed to "
                 << dt << "!"<< std::endl;
+            #endif
         }
     }
 
@@ -1527,13 +1641,16 @@ int planar3D(
     if(5 > floor(initialRadius / cellSize) && !override){
         cellSize = initialRadius / 5. - epsilon;
 
+        #if !defined(BUILD_DLL)
         std::cerr << "Warning: cell size is too big. It was changed to "
             << cellSize << "!"<< std::endl;
+    #endif
     }
 
+    #if !defined(BUILD_DLL)
     std::cout << "Number of cells per initial crack: "
         << floor(initialRadius / cellSize) << "." << std::endl;
-    std::cout << "initial raduis = " << initialRadius <<" . "<< std::endl;
+    #endif
 
     // Задаём расчётную область
 
@@ -1552,8 +1669,8 @@ int planar3D(
         y.push_back(i);
     }
 
-    const size_t xSize = x.size();
-    const size_t ySize = y.size();
+    std::size_t xSize = x.size();
+    std::size_t ySize = y.size();
 
     std::vector< std::vector<Cell> > mesh(xSize);
 
@@ -1564,14 +1681,15 @@ int planar3D(
             mesh[i][j].setCoordinates(x[i], y[j]);
         }
     }
-// ai::printMarker();
+
     // Задаём положение точечного источника закачки
 
     i00 = 0;
     j00 = floor(0.5 * ySize);
 
+    #if !defined(BUILD_DLL)
     // Сохраняем параметры расчёта
-// ai::printMarker();
+
     saveInitialData(
         "./Results/parameters",
         modelingTime,
@@ -1582,12 +1700,14 @@ int planar3D(
         injection,
         layers
     );
-	// ai::printMarker();
+    #endif
+
     // Пересчитываем контрасты по построенной расчётной сетке
 
     std::vector<double> stress;
     std::vector<double> flatYoungsModulus;
     std::vector<double> leakOff;
+    std::vector<double> toughness;
 
     if(!recalculateStressContrast(layers, stress, y)){
         return 31;
@@ -1607,8 +1727,11 @@ int planar3D(
     if(!recalculateLeakOffContrast(layers, leakOff, y)){
         return 31;
     }
+    if(!recalculateToughnessContrast(layers, toughness, y)){
+        return 31;
+    }
 
-    // Масштабируем выличины (продолжение)
+    // Масштабируем величины (продолжение)
 
     for(std::size_t i = 0; i < stress.size(); ++i){
         stress[i] /= (wn * E);
@@ -1616,11 +1739,29 @@ int planar3D(
     for(std::size_t i = 0; i < leakOff.size(); ++i){
         leakOff[i] *= std::sqrt(timeScale) / wn;
     }
-    for(std::size_t i = 0; i < injection.size(); ++i){
-        injection[i][2] *= timeScale / (wn * 60.);
+    for(std::size_t i = 0; i < toughness.size(); ++i){
+        // toughness[i] *= std::pow(10., 6);
+        toughness[i] /= std::pow(
+            mu * E * std::pow(E / timeScale, n),
+            1. / (n + 2.)
+        );
     }
-    std::cout<<"injection = "<<injection[0][2]<<std::endl;
-    Kic /= std::pow(mu * E * std::pow(E / timeScale, n), 1. / (n + 2.));
+
+    // define PROPPANT_MARKERS
+    for(std::size_t i = 0 ; i < injection.size();++i){
+            if(injection[i][3] > 0.00001){
+                // #define PROPPANT_MARKERS
+                break;
+            }
+    }
+
+    if(!initialized){
+        for(std::size_t i = 0; i < injection.size(); ++i){
+            injection[i][2] *= timeScale / (wn * 60.);
+        }
+
+        initialized = true;
+    }
 
     std::vector<double> zeroVectorX(xSize, 0.);
     std::vector<double> zeroVectorY(ySize, 0.);
@@ -1631,9 +1772,6 @@ int planar3D(
     std::vector<double> opening = zeroVectorXY;
     std::vector< std::vector<size_t> > index(xSize, zeroSizeTVectorY);
 
-	std::vector<std::vector<double> > open = zeroMatrixXY;
-    // initialRadius = 21.62464;
-    double volumeauto = 0.;
     for(size_t i = 0; i < xSize; ++i){
         for(size_t j = 0; j < ySize; ++j){
             index[i][j] = i * ySize + j;
@@ -1644,71 +1782,29 @@ int planar3D(
                 zP,
                 openingAtTheStart
             );
-			 open[i][j] = opening[index[i][j]];
         }
     }
 
-
-    for(size_t i = 0; i < xSize; ++i){
-        for(size_t j = 0; j < ySize; ++j){
-            index[i][j] = i * ySize + j;
-            if(i==0){
-                volumeauto +=opening[index[i][j]];
-            }
-            else{
-
-                volumeauto +=2.*opening[index[i][j]];
-            }
-        }
-    }
-    volumeauto*=dx*dy;
-
-
-    std::cout<<"Volume auto = "<<volumeauto<<std::endl;
-    std::cout<<"Volume injected = "<<injection[0][2]*T0<<std::endl;
-	ai::saveMatrix("open", open, "", true);
-
-    //Коррекция автомодельного решения
-    // double volumeDiff = injection[0][2]*T0 - volumeauto;
-    double effi = injection[0][2]*T0/volumeauto;
-    std::cout<<"effi = "<<effi<<std::endl;
-
-    for(size_t i = 0 ; i < xSize; ++i){
-        for(size_t j = 0; j < ySize; ++j){
-            opening[index[i][j]]*=effi;
-        }
-    }
-    volumeauto = 0.;
-
-    for(size_t i = 0; i < xSize; ++i){
-        for(size_t j = 0; j < ySize; ++j){
-            index[i][j] = i * ySize + j;
-            if(i==0){
-                // if(opening[index[i][j]]>epsilon)
-                // std::cout<<"opening = "<<opening[index[i][j]]*wn<<std::endl;
-                volumeauto +=opening[index[i][j]];
-            }
-            else{
-                volumeauto +=2.*opening[index[i][j]];
-            }
-        }
-    }
-    volumeauto*=dx*dy;
-
-    std::cout<<"New automod volume = "<<volumeauto<<std::endl;
+    #if !defined(BUILD_DLL)
     std::cout << std::endl;
     std::cout << "Building influence matrix... ";
+    #endif
 
     std::vector< std::vector<double> > influenceMatrix(xSize * ySize,
         zeroVectorXY);
 
     buildInfluenceMatrix(influenceMatrix, xSize, ySize);
 
+    #if !defined(BUILD_DLL)
     std::cout << "OK." << std::endl;
+    #endif
 
     if(considerElasticModulusContrast){
+        #if !defined(BUILD_DLL)
         std::cout << "Applying elastic modulus contrast... ";
+        #endif
 
+        #if defined(TRUE_ELASTIC_CONTRAST)
         std::vector< std::vector<double> > additiveToInflunceMatrix;
 
         // Заполняю ноликами пока
@@ -1723,14 +1819,38 @@ int planar3D(
         }
         // Заполняю ноликами пока
 
+        // Если не заполнять ноликами
+        // void calculateInflunceAddition(
+        //     std::vector< std::vector<double> > &additiveToInflunceMatrix,
+        //     const std::vector<double> &flatYoungsModulus,
+        //     const double xSize,
+        //     const double ySize,
+        //     const double dx,
+        //     const double dy
+        // );
+
+        // calculateInflunceAddition(
+        //     additiveToInflunceMatrix,
+        //     flatYoungsModulus,
+        //     xSize,
+        //     ySize,
+        //     dx,
+        //     dy
+        // );
+        #endif
+
+
+        /// Решение в виде кусочно-линейной функции
         for(std::size_t i = 0; i < xSize; ++i){
             for(std::size_t k = 0; k < ySize; ++k){
                 for(std::size_t j = 0; j < influenceMatrix[0].size(); ++j){
-                    influenceMatrix[index[i][k]][j] *= flatYoungsModulus[k];
+                    influenceMatrix[j][index[i][k]] *= flatYoungsModulus[k];
                 }
             }
         }
 
+        #if defined(TRUE_ELASTIC_CONTRAST)
+        /// Добавка  для точного решения
         for(std::size_t i = 0; i < influenceMatrix.size(); ++i){
             for(std::size_t j = 0; j < influenceMatrix[0].size(); ++j){
                 influenceMatrix[i][j] += additiveToInflunceMatrix[i][j];
@@ -1738,14 +1858,15 @@ int planar3D(
         }
 
         additiveToInflunceMatrix.clear();
+        #endif
 
+        #if !defined(BUILD_DLL)
         std::cout << "OK." << std::endl;
+        #endif
 
     }
 
-
-
-    std::cout << "Mesh: " << mesh.size() << "x" << mesh[0].size() << "."
+    std::cout <<"cellSize:" << cellSize << " Mesh: " << mesh.size() << "x" << mesh[0].size() << "." << "Modeling time: " << modelingTime
         << std::endl;
 
     std::vector< std::vector<bool> > elementIsActive;
@@ -1754,9 +1875,26 @@ int planar3D(
 
     findActiveElements(activeElements, elementIsActive, x, y, initialRadius);
 
+    #if !defined(BUILD_DLL)
     std::cout << "Active elements: " << activeElements.size() << "."
         << std::endl;
+    #endif
 
+    // std::vector<std::vector<int> > ac( mesh.size() );
+    // for(std::size_t i = 0; i< mesh.size(); ++i){
+    //     ac[i].resize(mesh[0].size());
+    // }
+    //
+    // for(size_t k = 0; k < activeElements.size(); ++k){
+    //     const size_t i = activeElements[k][0];
+    //     const size_t j = activeElements[k][1];
+    //
+    //     ac[i][j]=1;
+    // }
+    //
+    // std::cout<<"ac:"<<std::endl;
+    // ai::printMatrix(ac);
+    std::cout<<" "<<std::endl;
     std::vector<double> activationTime;
 
     for(size_t k = 0; k < activeElements.size(); ++k){
@@ -1786,17 +1924,34 @@ int planar3D(
         2. * dx
     );
 
+    #if !defined(BUILD_DLL)
     std::cout << "Ribbons: " << ribbons.size() << "." << std::endl;
+    #endif
 
+    #if defined(USE_EIGEN)
+    Eigen::VectorXd openingNew;
+    Eigen::MatrixXd partialInfluenceMatrix;
+    #else
     std::vector<double> openingNew;
     std::vector< std::vector<double> > partialInfluenceMatrix;
+    #endif
 
+    #if !defined(BUILD_DLL)
     std::cout << "Building partial influence matrix... ";
+    #endif
 
-    buildPartialInfluenceMatrix(influenceMatrix, activeElements, opening, openingNew,
-        partialInfluenceMatrix, index);
+    buildPartialInfluenceMatrix(
+        influenceMatrix,
+        activeElements,
+        opening,
+        openingNew,
+        partialInfluenceMatrix,
+        index
+    );
 
+    #if !defined(BUILD_DLL)
     std::cout << "OK." << std::endl;
+    #endif
 
     double height = 0.;
     double length = 0.;
@@ -1814,9 +1969,12 @@ int planar3D(
 
     omp_set_num_threads(numberOfThreads);
 
+    #if !defined(BUILD_DLL)
     std::cout << std::endl << "Running threads... OK. Size: "
         << getNumberOfThreads() << "." << std::endl;
+    #endif
 
+	std::cout << "start calculate" << std::endl;
     int returnCode = calculateEverything(
         opening,
         pressure,
@@ -1840,9 +1998,16 @@ int planar3D(
         layers,
         stress,
         leakOff,
+        toughness,
         flatYoungsModulus,
-        fluidDensity,
         proppantDensity,
+        proppantDiameter,
+        maximumConcentration,
+        proppantType,
+        fluidType,
+        fluidDensity,
+        fluidViscosity,
+        rheologyIndex,
         n,
         mu,
         wn,
@@ -1864,36 +2029,26 @@ int planar3D(
         considerElasticModulusContrast,
         saveSteps,
         runningFromGUI,
+        #if defined(BUILD_DLL)
+        override,
+        DLL_Parametrs
+        #else
         override
+        #endif
     );
 
     if(0 != returnCode){
         return returnCode;
     }
 
+    #if !defined(BUILD_DLL)
     std::cout << "Saving results... ";
     saveData("./Results/opening", opening, index, 1000. * wn);
     saveData("./Results/pressure", pressure, index);
-    saveData("./Results/concentration", concentration, index);
+    saveConcentrationData("./Results/concentration", concentration, index);
     saveData("./Results/distances", distances);
 
     calculateCrackGeometry(mesh, distances, length, height);
-    double sum = 0.;
-    for(size_t i =0 ; i< fracture.size();++i){
-        sum+=fracture[i][7];
-    }
-    double sumfluid = 0.;
-    for(size_t i =0 ; i< fracture.size();++i){
-        sumfluid += fracture[i][8];
-    }
-    double suminjection = 0.;
-    for(size_t i =0 ; i< fracture.size();++i){
-        suminjection += fracture[i][9];
-    }
-    double eff = 0.;
-
-    eff = ai::min(sumfluid , suminjection)/ai::max(sumfluid,suminjection) * 100.;
-    std::cout<<"Eff = "<<std::setprecision(16)<<eff<<" % "<<std::endl;
 
     fracture.push_back(
         std::vector<double>{
@@ -1902,9 +2057,7 @@ int planar3D(
             pressure[index[i00][j00]],
             length,
             height,
-            length / height,
-            sum,
-            suminjection + volumeauto
+            length / height
         }
     );
     std::stringstream comment;
@@ -1918,13 +2071,12 @@ int planar3D(
     comment.str(std::string());
 
     std::cout << "OK." << std::endl;
+    #endif
 
     // Вычисляем эффективность
 
     double fluidEfficiency;
     double proppantEfficiency;
-    double fluidVolumeOut = 0.;
-    double fluidVolumeIn = 0.;
 
     calculateEfficiency(
         fluidEfficiency,
@@ -1935,76 +2087,67 @@ int planar3D(
         concentration,
         index,
         T,
-        T0,
-        fluidVolumeOut,
-        fluidVolumeIn
+        T0
     );
 
+    #if !defined(BUILD_DLL)
     std::cout << std::endl;
     std::cout << "Efficiency: " << fluidEfficiency << "% [fluid]";
     if(-1. < proppantEfficiency){
         std::cout << ", " << proppantEfficiency << "% [proppant]";
     }
     std::cout << "." << std::endl;
+    #endif
 
-    // Сохраняем сжимающие напряжения в центральном слое
+ ////////////////////////////   #if defined(BUILD_DLL)
+ ////////////////////////////   if(std::isnan(fluidEfficiency)){
+ ////////////////////////////       fluidEfficiency = 0.;
+ ////////////////////////////       proppantEfficiency = 0.;
+ ////////////////////////////   }
+ ////////////////////////////
+ ////////////////////////////   /// Сохраняем сжимающие напряжения в центральном слое
+ ////////////////////////////   double nominalStress = 0.;
+ ////////////////////////////   for (std::size_t i = 0; i < layers.size(); ++i) {
+ ////////////////////////////       if (0. > layers[i][0] * layers[i][1]) {
+ ////////////////////////////           nominalStress = layers[i][2] * std::pow(10., -6);
+ ////////////////////////////       }
+ ////////////////////////////   }
 
-    double nominalStress = 0.;
+	////////////////////////////DLL_Parametrs.J_String = ExportJson(
+	////////////////////////////	opening,
+	////////////////////////////	wn,
+	////////////////////////////	pressure,
+	////////////////////////////	concentration,
+	////////////////////////////	markers,
+	////////////////////////////	markerVolume,
+	////////////////////////////	x,
+	////////////////////////////	y,
+	////////////////////////////	dx,
+	////////////////////////////	dy,
+	////////////////////////////	i00,
+	////////////////////////////	j00,
+	////////////////////////////	index,
+	////////////////////////////	T,
+	////////////////////////////	timeScale,
+	////////////////////////////	fluidEfficiency,
+	////////////////////////////	fluidDensity,
+	////////////////////////////	proppantDensity,
+	////////////////////////////	fluidInjection,
+	////////////////////////////	proppantInjection,
+	////////////////////////////	nominalStress,
+	////////////////////////////	DLL_Parametrs
+	////////////////////////////);
 
-    for(std::size_t i = 0; i < layers.size(); ++i){
-        if(0. > layers[i][0] * layers[i][1]){
-            nominalStress = layers[i][2] * std::pow(10., -6);
-
-            break;
-        }
-    }
-    double Z_coordinate = layers[0][0];
-    // Сохраняем JSON для интерфейса КиберГРП
-    std::string js;
-
-     js = ExportJson(
-        opening,
-         wn,
-        pressure,
-        concentration,
-        x,
-        y,
-        dx,
-        dy,
-        i00,
-        j00,
-        index,
-        T,
-        timeScale,
-         fluidEfficiency,
-        fluidDensity,
-        proppantDensity,
-        fluidInjection,
-        proppantInjection,
-        nominalStress,
-        Z_coordinate,
-        "a",
-        "b"
-    );
-    ai::saveLine("out.json", js);
-    SaveJson(
-        "./Results/output",
-        opening,
-        wn,
-        pressure,
-        concentration,
-        index,
-        T,
-        timeScale,
-        fluidEfficiency,
-        fluidDensity,
-        proppantDensity,
-        nominalStress
-    );
+ ////////////////////////////   // ai::saveLine("rez_emit.json", DLL_Parametrs.J_String);
+ ////////////////////////////
+ ////////////////////////////   Solver::DataCallback dataCallback =
+ ////////////////////////////        Solver::Callback::GetDataCallback();
+ ////////////////////////////
+ ////////////////////////////   dataCallback(DLL_Parametrs.J_String.c_str());
+ ////////////////////////////   #endif
 
     return 0;
 }
-
 
 /*!
  \details Вычисление полной длины и высоты трещины по элементам на осях,
@@ -2088,15 +2231,13 @@ void calculateEfficiency(
     const std::vector<double> &concentration,
     const std::vector< std::vector<std::size_t> > &index,
     const double T,
-    const double T0,
-    double& fluidVolumeOut,
-    double& fluidVolumeIn
+    const double T0
 ){
     const double xSize = index.size();
     const double ySize = index[0].size();
 
-    // double fluidVolumeOut = 0.;
-    // double fluidVolumeIn = 0.;
+    double fluidVolumeOut = 0.;
+    double fluidVolumeIn = 0.;
     double proppantVolumeOut = 0.;
     double proppantVolumeIn = 0.;
 
@@ -2116,21 +2257,17 @@ void calculateEfficiency(
     }
 
     /// Поправка на автомодельное решение
-    double eps = pow(10.,-8);
+
     proppantVolumeOut -= T0 * injection[0][2] * injection[0][3];
-    // std::cout<<" pre fluidVolumeOut = "<<fluidVolumeOut<<std::endl;
+
     fluidVolumeOut *= wn;
-    // std::cout<<"fluidVolumeOut = "<<fluidVolumeOut<<std::endl;
     proppantVolumeOut *= wn;
-    // std::size_t iter = 0;
+
     for(std::size_t i = i00 + 1; i < xSize; ++i){
         for(std::size_t j = 0; j < ySize; ++j){
-            if(opening[index[i][j]] >eps){
-                fluidVolumeIn += opening[index[i][j]];
-                proppantVolumeIn += concentration[index[i][j]]
-                    * opening[index[i][j]];
-                    // iter++;
-            }
+            fluidVolumeIn += opening[index[i][j]];
+            proppantVolumeIn += concentration[index[i][j]]
+                * opening[index[i][j]];
         }
     }
 
@@ -2138,22 +2275,20 @@ void calculateEfficiency(
     proppantVolumeIn *= 2.;
 
     for(std::size_t j = 0; j < ySize; ++j){
-        if(opening[index[i00][j]] > eps){
-            fluidVolumeIn += opening[index[i00][j]];
-            proppantVolumeIn += concentration[index[i00][j]]
-                * opening[index[i00][j]];
-                // iter++;
-        }
+        fluidVolumeIn += opening[index[i00][j]];
+        #if defined(PROPPANT_MARKERS)
+        proppantVolumeIn += 2. * concentration[index[i00][j]]
+            * opening[index[i00][j]];
+        #else
+        proppantVolumeIn += concentration[index[i00][j]]
+            * opening[index[i00][j]];
+        #endif
     }
-    // ai::saveVector("ope",opening);
-    // std::cout<<"iter = "<<iter<<std::endl;
-    // std::cout<<" pre fluidVolumeIn = "<<fluidVolumeIn*dx*dy<<std::endl;
-    // fluidVolumeIn *= dx * dy;
+
     fluidVolumeIn *= wn * dx * dy;
-    // std::cout<<"fluidVolumeIn = "<<fluidVolumeIn<<std::endl;
     proppantVolumeIn *= wn * dx * dy * 2.65 * 1000;
 
-    fluidEfficiency = fluidVolumeOut > eps ? 100 * fluidVolumeIn / fluidVolumeOut : 1.;
+    fluidEfficiency = 100 * fluidVolumeIn / fluidVolumeOut;
     if(0. < proppantVolumeOut){
         proppantEfficiency = 100 * proppantVolumeIn / proppantVolumeOut;
     }else{
@@ -2178,171 +2313,3 @@ void calculateEfficiency(
  \param[in] proppantDensity - плотность пропанта
  \param[in] nominalStress - сжимающее напряжение в центральном слое
 */
-void SaveJson(
-    const std::string filename,
-    std::vector<double> &opening,
-    double wn,
-    std::vector<double> &pressure,
-    std::vector<double> &concentration,
-    std::vector< std::vector<size_t> > &index,
-    double Time,
-    double timeScale,
-    double fluidEfficiency,
-    double fluidDensity,
-    double proppantDensity,
-    double nominalStress
-){
-    // Число атмосфер в 1 МПа
-    const double atmosphereCoefficient = 9.869;
-
-    const double xSize = index.size();
-    const double ySize = index[0].size();
-
-    double azimuth = 0;
-    int id = 0;
-    int stage_id = 0;
-    int num_fluids = 1;
-    int num_proppants = 1;
-
-
-    std::string extension(".json");
-    std::ofstream output(filename+ ai::string(Time) + extension);
-
-    if (!output.good()) {
-        throw std::runtime_error(
-            ai::string("Exception while saving the matrix into the file: ")
-            + filename
-        );
-    }
-
-
-    output << "{\n";
-    output << std::setprecision(14) << "\"Results\": {\n";
-    //Smin - минимальное значиние напряжений в интервале перфорации, [атм]
-    output << "\t\"Smin\": " << nominalStress * atmosphereCoefficient << ",\n";
-    output << "\t\"accumulated data\": {\n";
-    //    fluid efficiency - эффективность жидкости в момент времени "time", [%]
-    output << "\t  \"fluid efficiency\": " << fluidEfficiency << ",\n";
-    //    net pressure - значение чистого давления на устье трещины в слое интеравала перфорации с напряжением "Smin", [атм]
-    output << "\t  \"net pressure\": " << pressure[index[i00][j00]] * atmosphereCoefficient << ",\n";
-    //    proppant concentration - конентрация пропанта в момент времени "time" на входе в трещину, [кг / куб.м.]
-    output << "\t  \"proppant concentration\": " << proppantInjection << ",\n";
-    //    rate - расход смеси в момент времени "time" на входе в трещину, [куб.м / мин]
-    output << "\t  \"rate\": " << fluidInjection / (timeScale / (wn * 60.)) << ",\n";
-    //    time - момент времени на который записан результат расчета
-    output << "\t  \"time\": " << Time << "\n";
-    output << "\t},\n"; //close accumulated data
-
-    //////////////////////////////////////////////////////////////////////////////////////////
-    //     geometry
-    //////////////////////////////////////////////////////////////////////////////////////////
-    output << "\t\"geometry\": {\n";
-
-    //     branches - обозначение полукрыла трещины(0)
-    output << "\t\t\"branches\": [\n\t\t {\n";
-    //     cells - расчетные ячейки записанные в последовательности : сверху - вниз(j индексы), слева - направо(i индексы)
-    output << "\t\t \"cells\": [\n";
-    int activeElements = 0;                 //Число активных элементов (те элементы, где вектор раскрытия не нулевой)
-
-    //////////////////////////////////////////////////////////////////////////////////////////
-    //     Расчет числа активных элементов
-    //////////////////////////////////////////////////////////////////////////////////////////
-    for (int i = 0; i < xSize; i++)
-    {
-         for (int j = 0; j < ySize; j++)
-         {
-                if (opening[j*xSize + i] != 0) activeElements++; // если ячейка не раскрылась, то ее не выводим!!!
-         }
-    }
-
-    int Index=0;                                                 //Индексная переменная - номер выводимого массива данных
-
-    for (int i = 0; i < xSize; i++)
-    {
-         for (int j = 0; j < ySize; j++)
-         {
-                if (opening[j*xSize + i] == 0) continue; // если ячейка не раскрылась, то ее не выводим!!!
-                Index++;
-                output << "\t\t{ \n";
-                //     azimuth - азимут расчетной ячейки в пространстве(задается 0)
-                output << "\t\t  \"azimuth\": " << azimuth << ",\n";
-                //     concentrations - объемная доля концентрации фаз, [д.ед.]
-                 output << "\t\t  \"concentrations\": [\n ";
-                       //for (int index=0; index< num_proppants; index++) // вывод нескольких проппантов (когда будет несколько проппантов)
-                output << "\t\t  " << concentration[index[i][j]] << ",\n";                //Вывод концентрации проппанта
-                output << "\t\t  " << 1-concentration[index[i][j]] << "\n";                                   //Вывод концентрации жидкости
-
-                output << "\t\t ],\n"; //close concentrations
-                                                     //  dx, dy, dz - размеры расчетной ячейки(dy - раскрытие), [м]
-                output << "\t\t  \"dx\": " << dx << ",\n";
-                output << "\t\t  \"dy\": " << opening[j*xSize+i] << ",\n";
-                output << "\t\t  \"dz\": " << dy << ",\n";
-                //     id - 0; stage id - 0
-                output << "\t\t  \"i\": " << i << ",\n";
-                output << "\t\t  \"id\": " << id << ",\n";
-                output << "\t\t  \"j\": " << j << ",\n";
-                output << "\t\t  \"stage id\": " << stage_id << ",\n";
-                //     x, y, z - координаты центра расчетной ячеки в пространстве, [м]
-                output << "\t\t  \"x\": " << i*dx << ",\n";
-                output << "\t\t  \"y\": " << j* opening[j*xSize + i] << ",\n";
-                output << "\t\t  \"z\": " << j* dy << "\n";
-                if ( activeElements != Index) //i != xSize - 1 && j != ySize - 1  &&
-                       output << "\t\t },\n";
-                else{
-                       output << "\t\t }\n";
-                   }
-         }
-    }
-
-    output << "\n\t\t]\n"; //close cells
-    output << "\t\t }\n\t\t]\n"; //close branches
-    output << "\t},\n"; //close geometry
-
-    //////////////////////////////////////////////////////////////////////////////////////////
-    //     grid - параметры расчетной области
-    //////////////////////////////////////////////////////////////////////////////////////////
-    output << "\t\"grid\": {\n";
-    //     nx - общее количество расчетных ячеек по Х
-    output << "\t\t  \"nx\": " << xSize << ",\n";
-    //     nz - общее количество расчетных ячеек по Z
-    output << "\t\t  \"nz\": " << ySize << "\n";
-    output << "\t},\n"; //close grid
-
-    //////////////////////////////////////////////////////////////////////////////////////////
-    //     slurry - свойства смеси в закачке
-    //////////////////////////////////////////////////////////////////////////////////////////
-    output << "\t\"slurry\": {\n";
-
-    output << "\t\t\"mass density of components\": [\n";
-    //     mass density of components - плотность компонент(в той же последовательности, что и в "concentrations"), [кг / куб.м]
-    output << "\t\t " << proppantDensity <<",\n";
-    output << "\t\t " << fluidDensity <<"\n";
-
-    output << "\t\t ],\n"; //close mass density of components
-
-    output << "\t\t\"name of components\": [\n";
-    //     name of components - названия компонент(в той же последовательности, что и в "concentrations")
-    output << "\t\t \"Propant 1\",\n";
-    output << "\t\t \"Fluid 1\"\n";
-    output << "\t\t ],\n"; //close name of componentss
-
-    //     number of fluids - общее количество флюидов
-    output << "\t\t  \"number of fluids\": " << num_fluids << ",\n";
-    //     number of proppants - общее количество пропантов
-    output << "\t\t  \"number of proppants\": " << num_proppants << "\n";
-    output << "\t}\n"; //close slurry
-
-    output << "},\n"; //close Results
-
-    //coordinates - координаты центра интервала перфорации, [м]
-    output << "\"coordinates\": {\n";
-    output << "\t\t  \"x\": " << i00 * dx << ",\n";
-    output << "\t\t  \"y\": " << j00 * dy << ",\n";
-    output << "\t\t  \"z\": " << 0 << "\n";
-
-    output << "}\n";
-    output << "}\n";
-
-
-    output.close();
-}

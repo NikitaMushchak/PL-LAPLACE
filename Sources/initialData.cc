@@ -60,43 +60,177 @@ bool setInitialData(
     const std::string pathToLayersFile,
     std::vector< std::vector<double> > &layers,
     const std::string pathToInjectionFile,
-    std::vector< std::vector<double> > &injection
+    std::vector< std::vector<double> > &injection,
+    const std::string pathToFluidsFile = std::string(),
+    const std::string pathToProppantsFile = std::string(),
+    const bool multiFileFormat = false
 ){
-    if(std::string() != pathToInjectionFile){
-        try{
-            std::cout << "Injection... ";
+    std::vector< std::vector<double> > proppants;
+    std::vector< std::vector< std::vector<double> > > fluids;
 
-            ai::parseFileInMatrix(pathToInjectionFile, ' ', injection);
+    if(multiFileFormat){
+        if(std::string() != pathToInjectionFile){
+            try{
+                std::cout << "Injection... ";
 
-            if(2 > injection.size() || 6 > injection[0].size()){
-                std::cerr << "Cannot open '" << pathToInjectionFile
-                    << ", file is not appropriate." << std::endl;
+                ai::parseFileInMatrix(pathToInjectionFile, ' ', injection);
+
+                if(2 > injection.size() || 8 > injection[0].size()){
+                    std::cerr << "Cannot open '" << pathToInjectionFile
+                        << ", file is not appropriate." << std::endl;
+
+                    return false;
+                }
+                if(injection[0][0] < 2){
+                    std::cerr << "Cannot open '" << pathToInjectionFile << ", "
+                    << "standard version should be at least 2.0.0 "
+                    << "for this type of file." << std::endl;
+
+                    return false;
+                }
+
+                injection.erase(injection.begin());
+
+                std::cout << "OK. Size: " << injection.size() << "." 
+                    << std::endl;
+            }catch(const std::exception &error){
+                std::cout << "Fail!" << std::endl;
+
+                std::cerr << "Cannot open '" << pathToInjectionFile << "', "
+                    << "provide file and restart." << std::endl;
+
+                std::cerr << error.what() << std::endl;
 
                 return false;
             }
-            if(injection[0][0] < 1){
-                std::cerr << "Cannot open '" << pathToInjectionFile << ", "
-                << "standard version should be at least 1.0.0 "
-                << "for this type of file." << std::endl;
+
+            try{
+                std::cout << "Proppants... ";
+
+                ai::parseFileInMatrix(pathToProppantsFile, ' ', proppants);
+
+                if(1 > proppants.size() || 4 > proppants[0].size()){
+                    std::cerr << "Cannot open '" << pathToProppantsFile
+                        << ", file is not appropriate." << std::endl;
+
+                    return false;
+                }
+
+                std::cout << "OK. Size: " << proppants.size() << "." 
+                    << std::endl;
+            }catch(const std::exception &error){
+                std::cout << "Fail!" << std::endl;
+
+                std::cerr << "Cannot open '" << pathToProppantsFile << "', "
+                    << "provide file and restart." << std::endl;
+
+                std::cerr << error.what() << std::endl;
 
                 return false;
             }
 
-            injection.erase(injection.begin());
+            std::vector< std::vector<double> > fluid;
 
-            std::cout << "OK. Size: " << injection.size() << "." << std::endl;
-        }catch(const std::exception &error){
-            std::cout << "Fail!" << std::endl;
+            for(std::size_t i = 0; i < injection.size(); ++i){
+                bool foundById = false;
 
-            std::cerr << "Cannot open '" << pathToInjectionFile << "', "
-                << "provide file and restart." << std::endl;
+                int fluidId = injection[i][6];
+                int proppantId = injection[i][7];
 
-            std::cerr << error.what() << std::endl;
+                for(std::size_t j = 0; j < proppants.size(); ++j){
+                    if(proppantId == proppants[j][0]){
+                        foundById = true;
+                        injection[i][7] = j;
+                    }
+                }
 
-            return false;
+                if(!foundById){
+                    std::cerr << "Cannot find the proppant #'" << proppantId
+                        << "', " << "provide declaration and restart."
+                        << std::endl;
+                }
+
+                try{
+                    std::cout << "Fluid #" << fluidId << "... ";
+
+                    fluid.clear();
+
+                    std::string pathToFluidFile = ai::replace(
+                        pathToFluidsFile,
+                        "###",
+                        ai::string(fluidId)
+                    );
+
+                    ai::parseFileInMatrix(pathToFluidFile, ' ', fluid);
+
+                    if(1 > fluid.size() || 4 > fluid[0].size()){
+                        std::cerr << "Cannot open '" << pathToProppantsFile
+                            << ", file is not appropriate." << std::endl;
+
+                        return false;
+                    }
+
+                    std::cout << "OK. Size: " << fluids[0].size() << "." 
+                        << std::endl;
+                }catch(const std::exception &error){
+                    std::cout << "Fail!" << std::endl;
+
+                    std::cerr << "Cannot open '" << pathToProppantsFile 
+                        << "', " << "provide file and restart." << std::endl;
+
+                    std::cerr << error.what() << std::endl;
+
+                    return false;
+                }
+
+                if(!foundById){
+                    std::cerr << "Cannot find the fluid #'" << proppantId
+                        << "', " << "provide declaration and restart." 
+                        << std::endl;
+                }
+            }
+
+        }else{
+            std::cout << "Injection... No file." << std::endl;
         }
     }else{
-        std::cout << "Injection... No file." << std::endl;
+        if(std::string() != pathToInjectionFile){
+            try{
+                std::cout << "Injection... ";
+
+                ai::parseFileInMatrix(pathToInjectionFile, ' ', injection);
+
+                if(2 > injection.size() || 6 > injection[0].size()){
+                    std::cerr << "Cannot open '" << pathToInjectionFile
+                        << ", file is not appropriate." << std::endl;
+
+                    return false;
+                }
+                if(injection[0][0] < 1){
+                    std::cerr << "Cannot open '" << pathToInjectionFile << ", "
+                    << "standard version should be at least 1.0.0 "
+                    << "for this type of file." << std::endl;
+
+                    return false;
+                }
+
+                injection.erase(injection.begin());
+
+                std::cout << "OK. Size: " << injection.size() << "." 
+                    << std::endl;
+            }catch(const std::exception &error){
+                std::cout << "Fail!" << std::endl;
+
+                std::cerr << "Cannot open '" << pathToInjectionFile << "', "
+                    << "provide file and restart." << std::endl;
+
+                std::cerr << error.what() << std::endl;
+
+                return false;
+            }
+        }else{
+            std::cout << "Injection... No file." << std::endl;
+        }
     }
 
     if(std::string() != pathToLayersFile){
@@ -105,15 +239,15 @@ bool setInitialData(
 
             ai::parseFileInMatrix(pathToLayersFile, ' ', layers);
 
-            if(2 > layers.size() || 6 > layers[0].size()){
+            if(2 > layers.size() || 7 > layers[0].size()){
                 std::cerr << "Cannot open '" << pathToLayersFile
                     << ", file is not appropriate." << std::endl;
 
                 return false;
             }
-            if(layers[0][0] < 1){
+            if(layers[0][0] < 2){
                 std::cerr << "Cannot open '" << pathToInjectionFile << ", "
-                    << "standard version should be at least 1.0.0 "
+                    << "standard version should be at least 2.0.0 "
                     << "for this type of file." << std::endl;
 
                 return false;
@@ -456,6 +590,47 @@ bool recalculateLeakOffContrast(
     return true;
 }
 
+bool recalculateToughnessContrast(
+    const std::vector< std::vector<double> > &layers,
+    std::vector<double> &toughness,
+    const std::vector<double> &y
+){
+    std::vector<double> coordinates;
+    std::vector<double> coefficients;
+
+    for(int i = layers.size() - 1; i >= 0; --i){
+        coordinates.push_back(layers[i][0]);
+        coordinates.push_back(layers[i][1] - 0.001);
+        coefficients.push_back(layers[i][6]);
+        coefficients.push_back(layers[i][6]);
+    }
+
+    try{
+        createLinearOperator(coordinates, coefficients);
+    }catch(const std::exception &error){
+        std::cerr << "Error during calculations of the linear operator for "
+            << "toughness contrast." << std::endl;
+
+        std::cerr << error.what() << std::endl;
+
+        return false;
+    }
+
+    toughness.clear();
+
+    for(std::size_t i = 0; i < y.size(); ++i){
+        toughness.push_back(
+            calculateValueWithLinearOperator(
+                y[i],
+                coordinates,
+                coefficients
+            )
+        );
+    }
+
+    return true;
+}
+
 /*!
  \details Функция сохраняет начальные параметры в файл формата JSON по
  установленному шаблону
@@ -502,7 +677,7 @@ void saveInitialData(
 
         return output;
     };
-	// ai::printMarker(500);
+
     output << "{" << std::endl;
     ++indentLevel;
 
@@ -526,7 +701,6 @@ void saveInitialData(
 
     output << indent() << "\"injection\": {" << std::endl;
     ++indentLevel;
-	// ai::printMarker();
         for(size_t i = 0; i < injection.size(); ++i){
             if(injection[i].size() != 6){
                 throw std::runtime_error(
@@ -560,15 +734,13 @@ void saveInitialData(
 
     output << indent() << "\"layers\": {" << std::endl;
     ++indentLevel;
-	// ai::printMarker(10);
         for(size_t i = 0; i < layers.size(); ++i){
-            // ai::printMarker();
-			// if(layers[i].size() != 6){
-            //     throw std::runtime_error(
-            //         ai::string("Exception in size of the vector: layers")
-            //     );
-            // }
-			// ai::printMarker();
+            if(layers[i].size() != 7){
+                throw std::runtime_error(
+                    ai::string("Exception in size of the vector: layers")
+                );
+            }
+
             output << indent() << "\"" << ai::string(i) << "\": {"
                 << std::endl;
             ++indentLevel;
@@ -582,8 +754,10 @@ void saveInitialData(
                     << layers[i][3] << "," << std::endl;
                 output << indent() << "\"Poisson's ratio\": "
                     << layers[i][4] << "," << std::endl;
+                output << indent() << "\"toughness factor\": "
+                    << layers[i][5] << "," << std::endl;
                 output << indent() << "\"Carter's coefficient\": "
-                    << layers[i][5] << std::endl;
+                    << layers[i][7] << std::endl;
             --indentLevel;
             output << indent() << "}";
             if(layers.size() > i + 1){
@@ -595,5 +769,4 @@ void saveInitialData(
     output << indent() << "}" << std::endl;
 
     output << "}";
-	ai::printMarker();
 }

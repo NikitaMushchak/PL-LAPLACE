@@ -8,14 +8,16 @@ int completeMesh(
     std::size_t meshSize,
     std::vector<double> &x,
     std::vector<double> &y,
-    std::size_t i00,
-    std::size_t j00,
+    std::size_t &i00,
+    std::size_t &j00,
     std::vector< std::vector<Cell> > &mesh,
+    std::vector<Ribbon> &ribbons,
     std::vector< std::vector<std::size_t> > &index,
     std::vector<double> &opening,
     std::vector<double> &pressure,
     std::vector<double> &concentration,
     std::vector< std::vector<double> > &distances,
+    std::vector< std::vector<std::size_t> > &activeElements,
     std::vector< std::vector<bool> > &elementIsActive,
     std::vector<double> &activationTime,
     std::vector< std::vector<double> > &layers,
@@ -23,6 +25,10 @@ int completeMesh(
     std::vector<double> &stress,
     std::vector<double> &leakOff,
     std::vector<double> &toughness,
+    const double wn,
+    const double timeScale,
+    const double mu,
+    const double n,
     std::size_t &xSize,
     std::size_t &ySize,
     bool considerElasticModulusContrast,
@@ -69,5 +75,9 @@ int scaleMesh(
     const double T0,
     double &E,
     const bool considerElasticModulusContrast,
-    int &meshScalingCounter
+	#if defined(PROPPANT_MARKERS)
+    std::vector< std::vector<double> > &markers,
+    std::vector<double> &markerVolume,
+	#endif
+	int &meshScalingCounter
 );

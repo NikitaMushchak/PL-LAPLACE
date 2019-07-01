@@ -7,7 +7,7 @@
 //#include "../jsoncpp/include/json/reader.h"
 #include <memory>
 
-#include "planar3D.hh"
+#include "../planar3D.hh"
 
 #include "api.h"
 
@@ -27,7 +27,7 @@ public:
 //  void read(const Json::Value &json);
   bool IsRunning() { return play; }
   bool IsPaused() { return pause; }
-  void Calculate();
+ // void Calculate();
  // void write(Json::Value &json) const;
 
   void NotifyFinished();

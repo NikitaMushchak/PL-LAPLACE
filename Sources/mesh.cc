@@ -5,6 +5,7 @@
 */
 #include <vector>
 
+#include "markers.hh"
 #include "planar3D.hh"
 #include "initialData.hh"
 #include "influenceMatrix.hh"
@@ -15,14 +16,16 @@ int completeMesh(
     std::size_t meshSize,
     std::vector<double> &x,
     std::vector<double> &y,
-    std::size_t i00,
-    std::size_t j00,
+    std::size_t &i00,
+    std::size_t &j00,
     std::vector< std::vector<Cell> > &mesh,
+    std::vector<Ribbon> &ribbons,
     std::vector< std::vector<std::size_t> > &index,
     std::vector<double> &opening,
     std::vector<double> &pressure,
     std::vector<double> &concentration,
     std::vector< std::vector<double> > &distances,
+    std::vector< std::vector<std::size_t> > &activeElements,
     std::vector< std::vector<bool> > &elementIsActive,
     std::vector<double> &activationTime,
     std::vector< std::vector<double> > &layers,
@@ -30,12 +33,16 @@ int completeMesh(
     std::vector<double> &stress,
     std::vector<double> &leakOff,
     std::vector<double> &toughness,
+    const double wn,
+    const double timeScale,
+    const double mu,
+    const double n,
     std::size_t &xSize,
     std::size_t &ySize,
     bool considerElasticModulusContrast,
     std::vector< std::vector<double> > &influenceMatrix
 ){
-
+    
     if(meshSize < x.size()){
         return 0;
     }
@@ -60,9 +67,9 @@ int completeMesh(
     ySize = y.size();
     i00 = 0;
     j00 = floor(0.5 * ySize);
-
+    
     std::size_t maxIndex = 0;
-
+    
     for(std::size_t i = 0; i < index.size(); ++i){
         for(std::size_t j = 0; j < index[0].size(); ++j){
             if(index[i][j] > maxIndex){
@@ -72,9 +79,9 @@ int completeMesh(
     }
 
     mesh.resize(xSize);
-    index.resize(xSize);
-    distances.resize(xSize);
-    elementIsActive.resize(xSize);
+    // index.resize(xSize);
+    // distances.resize(xSize);
+    // elementIsActive.resize(xSize);
     influenceMatrix.resize(xSize * ySize);
 
     std::size_t k = 1;
@@ -82,35 +89,35 @@ int completeMesh(
 
     for(size_t i = 0; i < oldXSize; ++i){
         mesh[i].resize(ySize);
-        distances[i].resize(ySize);
-        elementIsActive[i].resize(ySize);
+        // distances[i].resize(ySize);
+        // elementIsActive[i].resize(ySize);
 
         for(size_t j = oldYSize; j < ySize; ++j){
-            distances[i][j] = 0.;
-            elementIsActive[i][j] = false;
+            // distances[i][j] = 0.;
+            // elementIsActive[i][j] = false;
         }
         for(l = 0; l < (ySize - oldYSize) / 2; ++l){
-            index[i].insert(index[i].begin() + l, maxIndex + k);
-
+            // index[i].insert(index[i].begin() + l, maxIndex + k);
+            
             ++k;
         }
         for(l += oldYSize; l < ySize; ++l){
-            index[i].push_back(maxIndex + k);
-
+            // index[i].push_back(maxIndex + k);
+            
             ++k;
         }
     }
     for(size_t i = oldXSize; i < xSize; ++i){
         mesh[i].resize(ySize);
-        index[i].resize(ySize);
-        distances[i].resize(ySize);
-        elementIsActive[i].resize(ySize);
+        // index[i].resize(ySize);
+        // distances[i].resize(ySize);
+        // elementIsActive[i].resize(ySize);
 
         for(size_t j = 0; j < ySize; ++j){
-            distances[i][j] = 0.;
-            index[i][j] = maxIndex + k;
-            elementIsActive[i][j] = false;
-
+            // distances[i][j] = 0.;
+            // index[i][j] = maxIndex + k;
+            // elementIsActive[i][j] = false;
+            
             ++k;
         }
     }
@@ -122,22 +129,73 @@ int completeMesh(
     for(std::size_t i = 0; i < influenceMatrix.size(); ++i){
         influenceMatrix[i].resize(xSize * ySize);
     }
+
     buildInfluenceMatrix(influenceMatrix, xSize, ySize);
 
-    ai::printMatrix(index);
+    std::vector< std::vector<std::size_t> > newIndex(xSize);
+    std::vector< std::vector<double> > newDistances(xSize);
+    std::vector< std::vector<bool> > newElementIsActive(xSize);
+    std::vector< std::vector<Cell> > newMesh(xSize);
 
-    opening.resize(xSize * ySize);
-    pressure.resize(xSize * ySize);
-    concentration.resize(xSize * ySize);
-    activationTime.resize(xSize * ySize);
+    std::vector<double> newOpening(xSize * ySize);
+    std::vector<double> newPressure(xSize * ySize);
+    std::vector<double> newConcentration(xSize * ySize);
+    std::vector<double> newActivationTime(xSize * ySize);
 
-    for(std::size_t i = oldXSize * oldYSize; i < xSize * ySize; ++i){
-        opening[i] = 0.;
-        pressure[i] = 0.;
-        concentration[i] = 0.;
-        activationTime[i] = 0.;
+    for(std::size_t i = 0; i < xSize; ++i){
+        newIndex[i].resize(ySize);
+        newDistances[i].resize(ySize);
+        newElementIsActive[i].resize(ySize);
+        newMesh[i].resize(ySize);
+        for(std::size_t j = 0; j < ySize; ++j){
+            newIndex[i][j] = i * ySize + j;
+            newOpening[newIndex[i][j]] = 0.;
+            newPressure[newIndex[i][j]] = 0.;
+            newConcentration[newIndex[i][j]] = 0.;
+            newActivationTime[newIndex[i][j]] = 0.;
+            newMesh[i][j].setCoordinates(x[i], y[j]);
+        }
     }
 
+    for(std::size_t i = 0; i < oldXSize; ++i){
+        for(std::size_t j = 0; j < oldYSize; ++j){
+            std::size_t shift = (ySize - oldYSize) / 2;
+            newDistances[i][j + shift] = distances[i][j];
+            newElementIsActive[i][j + shift] = elementIsActive[i][j];
+            newOpening[newIndex[i][j + shift]] = opening[index[i][j]];
+            newPressure[newIndex[i][j + shift]] = pressure[index[i][j]];
+            newConcentration[newIndex[i][j + shift]] = concentration[index[i][j]];
+            newMesh[i][j + shift].type = mesh[i][j].type;
+        }
+    }
+
+    for(std::size_t i = 0; i < ribbons.size(); ++i){
+        std::size_t shift = (ySize - oldYSize) / 2;
+        ribbons[i].j += shift;
+    }
+
+    // saveData("opening", opening, index);
+    // saveData("pressure", pressure, index);
+    // saveData("concentration", concentration, index);
+    // saveData("activationTime", activationTime, index);
+
+    index = newIndex;
+    opening = newOpening;
+    pressure = newPressure;
+    concentration = newConcentration;
+    activationTime = newActivationTime;
+    distances = newDistances;
+    elementIsActive = newElementIsActive;
+    mesh = newMesh;
+
+    // ai::save("stress", stress);
+    // ai::save("leakOff", leakOff);
+
+    // saveData("opening2", opening, index);
+    // saveData("pressure2", pressure, index);
+    // saveData("concentration2", concentration, index);
+    // saveData("activationTime2", activationTime, index);
+    
     if(!recalculateStressContrast(layers, stress, y)){
         return 31;
     }
@@ -153,33 +211,36 @@ int completeMesh(
         return 31;
     }
 
-    // if(!recalculateLeakOffContrast(layers, leakOff, y)){
-    //     return 31;
-    // }
-    // if(!recalculateToughnessContrast(layers, toughness, y)){
-    //     return 31;
-    // }
+    if(!recalculateLeakOffContrast(layers, leakOff, y)){
+        return 31;
+    }
+    if(!recalculateToughnessContrast(layers, toughness, y)){
+        return 31;
+    }
 
-    // Масштабируем выличины (продолжение)
+    // Масштабируем величины (продолжение)
 
-    // for(std::size_t i = 0; i < stress.size(); ++i){
-    //     stress[i] /= (wn * E);
-    // }
-    // for(std::size_t i = 0; i < leakOff.size(); ++i){
-    //     leakOff[i] *= std::sqrt(timeScale) / wn;
-    // }
-    // for(std::size_t i = 0; i < toughness.size(); ++i){
-    //     toughness[i] /= std::pow(
-    //         mu * E * std::pow(E / timeScale, n),
-    //         1. / (n + 2.)
-    //     );
-    // }
+    for(std::size_t i = 0; i < stress.size(); ++i){
+        stress[i] /= (wn * E);
+    }
+    for(std::size_t i = 0; i < leakOff.size(); ++i){
+        leakOff[i] *= std::sqrt(timeScale) / wn;
+    }
+    for(std::size_t i = 0; i < toughness.size(); ++i){
+        toughness[i] /= std::pow(
+            mu * E * std::pow(E / timeScale, n),
+            1. / (n + 2.)
+        );
+    }
+
+    // ai::save("stress2", stress);
+    // ai::save("leakOff2", leakOff);
 
     ai::printLine(
         ai::string("Completing mesh... Added ")
         + ai::string(k - 1) + ai::string(" new cells.")
     );
-
+    
     return 0;
 }
 
@@ -223,6 +284,10 @@ int scaleMesh(
     const double T0,
     double &E,
     const bool considerElasticModulusContrast,
+	#if defined(PROPPANT_MARKERS)
+	std::vector< std::vector<double> > &markers,
+	std::vector<double> &markerVolume,
+	#endif
     int &meshScalingCounter
 ){
     --meshScalingCounter;
@@ -507,7 +572,21 @@ int scaleMesh(
 
     opening = openingNew;
     distances = distancesNew;
-    concentration = concentrationNew;
+	#if defined(PROPPANT_MARKERS)
+        ////////////////////////////////////////////////////////////////////////////////////////
+        /// Пересчет концентрации в соответствии с положением маркеров
+        recalcConcentation(
+            markers,
+            index,
+            concentration,
+            opening,
+            markerVolume,
+            wn
+        );
+        ////////////////////////////////////////////////////////////////////////////////////////
+	#else
+        concentration = concentrationNew;
+	#endif
 
     if(!recalculateStressContrast(layers, stress, y)){
         return 31;
@@ -527,11 +606,11 @@ int scaleMesh(
     if(!recalculateLeakOffContrast(layers, leakOff, y)){
         return 31;
     }
-    // if(!recalculateToughnessContrast(layers, toughness, y)){
-    //     return 31;
-    // }
+    if(!recalculateToughnessContrast(layers, toughness, y)){
+        return 31;
+    }
 
-    // Масштабируем выличины (продолжение)
+    // Масштабируем величины (продолжение)
 
     for(std::size_t i = 0; i < stress.size(); ++i){
         stress[i] /= (wn * E);
